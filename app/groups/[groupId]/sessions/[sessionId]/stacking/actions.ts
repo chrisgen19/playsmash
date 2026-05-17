@@ -38,9 +38,11 @@ export async function generateRoundAction(
   const sessionId = String(formData.get("sessionId") ?? "");
   if (!groupId || !sessionId) return { error: "Missing groupId or sessionId" };
 
-  const { userId } = await requireGroupRole(groupId, OWNERS_AND_ADMINS);
-
+  // requireGroupRole lives inside the try so a ForbiddenError flows through
+  // toMessage and returns a structured StackingActionState error instead of
+  // escaping as an uncaught exception (which would surface as a 500).
   try {
+    const { userId } = await requireGroupRole(groupId, OWNERS_AND_ADMINS);
     const r = await generateNextRound({
       groupId,
       actorUserId: userId,

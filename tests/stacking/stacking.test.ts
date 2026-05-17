@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  assignPlayersToCourts,
   buildPairingHistory,
   generateRoundMatches,
+  mulberry32,
   pairKey,
   scoreCandidateMatch,
   type GenerateRoundOutput,
@@ -252,5 +254,35 @@ describe("fairness over multiple rounds", () => {
 describe("pairKey", () => {
   it("is order-independent", () => {
     expect(pairKey("a", "b")).toBe(pairKey("b", "a"));
+  });
+});
+
+describe("assignPlayersToCourts — input guards", () => {
+  it("throws when attempts is not a positive integer", () => {
+    const rng = mulberry32(1);
+    const history = buildPairingHistory([]);
+    const four = ["p1", "p2", "p3", "p4"];
+    expect(() =>
+      assignPlayersToCourts(four, history, 1, rng, 0),
+    ).toThrow(RangeError);
+    expect(() =>
+      assignPlayersToCourts(four, history, 1, rng, -3),
+    ).toThrow(RangeError);
+    expect(() =>
+      assignPlayersToCourts(four, history, 1, rng, 1.5),
+    ).toThrow(RangeError);
+  });
+
+  it("works with the minimum attempts (1)", () => {
+    const rng = mulberry32(1);
+    const history = buildPairingHistory([]);
+    const matches = assignPlayersToCourts(
+      ["p1", "p2", "p3", "p4"],
+      history,
+      1,
+      rng,
+      1,
+    );
+    expect(matches).toHaveLength(1);
   });
 });

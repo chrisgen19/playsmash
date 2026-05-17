@@ -73,6 +73,13 @@ export function assignPlayersToCourts(
   rng: Rng,
   attempts = 64,
 ): GeneratedMatch[] {
+  if (!Number.isInteger(attempts) || attempts < 1) {
+    // Guard against a non-positive `attempts` — otherwise the loop never
+    // runs, `best` stays null, and the function would null-deref at return.
+    throw new RangeError(
+      `assignPlayersToCourts: attempts must be a positive integer (got ${attempts})`,
+    );
+  }
   if (selected.length % 4 !== 0) {
     throw new Error(
       `assignPlayersToCourts: player count must be a multiple of 4 (got ${selected.length})`,

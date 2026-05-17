@@ -385,6 +385,12 @@ model Match {
   team2P1 PlayerProfile  @relation("MatchT2P1", fields: [team2Player1Id], references: [id], onDelete: Restrict)
   team2P2 PlayerProfile? @relation("MatchT2P2", fields: [team2Player2Id], references: [id], onDelete: Restrict)
 
+  // Defense-in-depth: even with the SELECT FOR UPDATE lock in
+  // generateNextRound, having the DB reject a second `(session, round, court)`
+  // row guarantees we can never schedule two matches on the same court in
+  // the same round. Postgres treats NULL as distinct by default, so an
+  // unassigned court (courtId IS NULL) is still permitted.
+  @@unique([sessionId, roundNumber, courtId])
   @@index([sessionId, roundNumber])
   @@index([sessionId, status])
   @@index([courtId])

@@ -204,8 +204,12 @@ export async function generateNextRound(params: {
       }
     }
 
-    // Players in the round → PLAYING. Resting → RESTING. Anyone else who was
-    // AVAILABLE/WAITING but not selected stays WAITING for visibility.
+    // The pure algorithm partitions every eligible session player into
+    // either `result.matches` (selected to play) or `result.restingPlayerIds`
+    // (unselected). So the two updateMany calls below cover the full set —
+    // there is no third "WAITING" bucket in the MVP algorithm. If we add
+    // a player-driven check-out/check-in workflow later, an extra status
+    // transition belongs here.
     const playingProfileIds = new Set(
       result.matches.flatMap((m) => [...m.team1, ...m.team2]),
     );
