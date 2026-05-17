@@ -21,6 +21,10 @@ export const ActivityAction = {
   PLAYER_REMOVED: "player.removed",
   // invites
   INVITE_DISABLED: "invite.disabled",
+  // sessions
+  SESSION_CREATED: "session.created",
+  SESSION_STARTED: "session.started",
+  SESSION_PLAYERS_UPDATED: "session.players_updated",
 } as const;
 
 export type ActivityActionValue =
@@ -30,7 +34,8 @@ export type ActivityTargetType =
   | "Group"
   | "GroupMember"
   | "PlayerProfile"
-  | "Invite";
+  | "Invite"
+  | "PlaySession";
 
 export type LogActivityInput = {
   groupId: string;

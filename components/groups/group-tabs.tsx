@@ -21,6 +21,7 @@ export function GroupTabs({
   const base = `/groups/${groupId}`;
   const tabs = [
     { href: base, label: "Overview" },
+    { href: `${base}/sessions`, label: "Sessions" },
     { href: `${base}/members`, label: "Members" },
     { href: `${base}/players`, label: "Players" },
     ...(showSettings
