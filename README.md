@@ -266,6 +266,8 @@ Unit tests (Vitest) cover the critical pure logic and services:
 
 Playsmash is built phase by phase. Each phase ends with type-check + lint + tests + build all green.
 
+> **🎉 MVP cutoff reached at the end of Phase 6.** Every requirement from the [MVP definition of done](#mvp-definition-of-done) is shipped. Phases 7–8 are polish: realtime UX, ownership transfer, activity log UI, and a deployment checklist.
+
 ### ✅ Phase 1 — Authentication & base schema
 
 - [x] Auth.js v5 (Credentials + Google OAuth) with Prisma adapter
@@ -352,4 +354,20 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 
 ### MVP definition of done
 
-The MVP is complete when a user can register/login, create a group, invite or add players (including temporary ones), create a session, select players, set courts, generate doubles court assignments, view stacking, enter scores, view scores, and see basic player stats — all with server-side permissions enforced.
+The MVP is complete when a user can register/login, create a group, invite or add players (including temporary ones), create a session, select players, set courts, generate doubles court assignments, view stacking, enter scores, view scores, and see basic player stats — all with server-side permissions enforced. ✅ **Reached at the end of Phase 6.**
+
+| Requirement | Phase |
+|---|---|
+| Register / log in | 1 |
+| Create a group | 1 |
+| Invite or add players | 2 |
+| Create temporary players | 2 |
+| Create a session | 3 |
+| Select available players | 3 |
+| Set number of courts | 3 |
+| Generate doubles court assignments | 4 |
+| Players can view stacking | 4 |
+| Enter scores | 5 |
+| Players can view scores | 5 |
+| Basic player stats | 6 |
+| Server-side permissions enforced | every phase |
