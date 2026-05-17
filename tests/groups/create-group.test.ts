@@ -10,6 +10,7 @@ const { prismaMock, txMocks } = vi.hoisted(() => {
     groupMember: { create: vi.fn() },
     playerProfile: { create: vi.fn() },
     invite: { create: vi.fn() },
+    activityLog: { create: vi.fn() },
   };
   const prismaMock = {
     group: { findUnique: vi.fn() },
@@ -24,7 +25,7 @@ vi.mock("@/lib/db", async () => {
   const enums = await vi.importActual<
     typeof import("@/lib/db/generated/enums")
   >("@/lib/db/generated/enums");
-  return { ...enums, prisma: prismaMock };
+  return { ...enums, prisma: prismaMock, Prisma: {} };
 });
 
 const { createGroupForOwner } = await import("@/lib/groups/create-group");
@@ -45,7 +46,8 @@ describe("createGroupForOwner", () => {
     }));
     txMocks.groupMember.create.mockResolvedValue({});
     txMocks.playerProfile.create.mockResolvedValue({});
-    txMocks.invite.create.mockResolvedValue({});
+    txMocks.invite.create.mockResolvedValue({ id: "invite_1" });
+    txMocks.activityLog.create.mockResolvedValue({});
   });
 
   it("creates Group + OWNER member + linked player + Invite in one transaction", async () => {

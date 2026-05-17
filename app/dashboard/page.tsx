@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { AppHeader } from "@/components/shared/app-header";
+import { JoinGroupForm } from "@/components/groups/join-group-form";
 import { RoleBadge } from "@/components/shared/role-badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,6 +61,18 @@ export default async function DashboardPage() {
             </Button>
           </div>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base">Join a group</CardTitle>
+            <CardDescription>
+              Got a join code from an admin? Drop it here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <JoinGroupForm compact />
+          </CardContent>
+        </Card>
 
         {memberships.length === 0 ? (
           <Card>

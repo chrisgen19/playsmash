@@ -6,6 +6,7 @@ import {
   InviteStatus,
   type Group,
 } from "@/lib/db";
+import { ActivityAction, logActivity } from "@/lib/activity/log";
 import type { CreateGroupInput } from "@/lib/validations/group";
 
 import { generateUniqueJoinCode } from "./join-code";
@@ -85,6 +86,18 @@ export async function createGroupForOwner(params: {
         status: InviteStatus.ACTIVE,
       },
     });
+
+    await logActivity(
+      {
+        groupId: createdGroup.id,
+        userId: ownerUserId,
+        action: ActivityAction.GROUP_CREATED,
+        targetType: "Group",
+        targetId: createdGroup.id,
+        newValue: { name: input.name, visibility: input.visibility },
+      },
+      tx,
+    );
 
     return createdGroup;
   });

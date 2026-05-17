@@ -35,6 +35,7 @@ model User {
   playerProfilesByMe PlayerProfile[] @relation("PlayerProfileCreatedBy")
   invitesCreated     Invite[]        @relation("InviteCreatedBy")
   joinRequests       JoinRequest[]
+  activityLogs       ActivityLog[]
 
   @@index([email])
 }
@@ -138,6 +139,7 @@ model Group {
   players      PlayerProfile[]
   invites      Invite[]
   joinRequests JoinRequest[]
+  activityLogs ActivityLog[]
 
   @@index([createdByUserId])
 }
@@ -214,4 +216,26 @@ model JoinRequest {
 
   @@unique([groupId, userId])
   @@index([groupId])
+}
+
+// -----------------------------------------------------------------------------
+// Activity log — write-side persisted from Phase 2; UI in Phase 8.
+// -----------------------------------------------------------------------------
+
+model ActivityLog {
+  id         String   @id @default(cuid())
+  groupId    String
+  userId     String? // null when the actor is the system
+  action     String // e.g. "member.role_changed", "player.created_temp"
+  targetType String // e.g. "GroupMember", "PlayerProfile", "Invite"
+  targetId   String
+  oldValue   Json?
+  newValue   Json?
+  createdAt  DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([groupId, createdAt])
+  @@index([targetType, targetId])
 }
