@@ -199,7 +199,7 @@ Implemented so far (Phases 1–2):
 | `PlaySession` | A scheduled play day — courts, scoring rules, status. Named `PlaySession` because Auth.js owns `Session`. |
 | `Court` | A court within a session. |
 | `SessionPlayer` | A player checked in to a session. Unique on `(sessionId, playerProfileId)`. |
-| `Match` | A generated doubles match — `sessionId`, `courtId?`, `roundNumber`, four team slots, scores, `winningTeam?`, `status`. |
+| `Match` | A generated doubles match — `sessionId`, `courtId?`, `roundNumber`, four team slots, scores, `winningTeam?`, `status`. Unique on `(sessionId, roundNumber, courtId)` to prevent any duplicate court schedule per round. |
 
 Planned (Phase 5+): `ScoreEvent`.
 
