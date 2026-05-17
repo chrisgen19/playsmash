@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { AddTempPlayerForm } from "@/components/groups/add-temp-player-form";
@@ -133,9 +134,12 @@ export default async function GroupPlayersPage({
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="truncate text-sm font-medium">
+                    <Link
+                      href={`/groups/${groupId}/players/${p.id}`}
+                      className="truncate text-sm font-medium hover:underline"
+                    >
                       {p.displayName}
-                    </p>
+                    </Link>
                     <StatusBadge status={p.status} />
                   </div>
                   <p className="text-muted-foreground truncate text-xs">

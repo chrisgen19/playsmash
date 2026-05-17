@@ -40,7 +40,8 @@
       "Bash(git commit *)",
       "Bash(gh issue create --repo chrisgen19/playsmash --title 'Phase 3 — Sessions, attendance & courts' --body ' *)",
       "Bash(gh issue create --repo chrisgen19/playsmash --title 'Phase 4 — Stacking algorithm & match generation' --body ' *)",
-      "Bash(gh issue create --repo chrisgen19/playsmash --title 'Phase 5 — Scoring & match lifecycle' --body ' *)"
+      "Bash(gh issue create --repo chrisgen19/playsmash --title 'Phase 5 — Scoring & match lifecycle' --body ' *)",
+      "Bash(gh issue create --repo chrisgen19/playsmash --title 'Phase 6 — Player stats & history' --body ' *)"
     ]
   }
 }
