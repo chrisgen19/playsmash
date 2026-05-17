@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import { EditAttendanceForm } from "@/components/sessions/edit-attendance-form";
 import { StartSessionButton } from "@/components/sessions/start-session-button";
+import { LocalDateTime } from "@/components/shared/local-datetime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -109,7 +110,7 @@ export default async function SessionDetailPage({
             </Badge>
           </div>
           <p className="text-muted-foreground text-sm">
-            {session.date.toISOString().slice(0, 16).replace("T", " ")}
+            <LocalDateTime iso={session.date.toISOString()} />
             {session.location ? ` · ${session.location}` : ""}
           </p>
         </div>

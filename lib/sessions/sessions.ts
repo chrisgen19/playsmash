@@ -24,8 +24,10 @@ export class SessionActionError extends Error {
 
 /**
  * Resolve the PlayerProfile ids the caller selected, keeping only those that
- * belong to `groupId` and aren't REMOVED. Returns the validated set; throws
- * if any submitted id is outside the group (never trust client ids).
+ * belong to `groupId` and are eligible to play (ACTIVE or TEMPORARY). Returns
+ * the validated set; throws if any submitted id is outside the group or
+ * ineligible — never trust client ids, and don't rely on the UI's filter
+ * alone (a forged submit could otherwise add INACTIVE/REMOVED players).
  */
 async function validateGroupPlayers(
   groupId: string,
@@ -38,17 +40,33 @@ async function validateGroupPlayers(
     where: {
       id: { in: unique },
       groupId,
-      status: { not: PlayerStatus.REMOVED },
+      status: { in: [PlayerStatus.ACTIVE, PlayerStatus.TEMPORARY] },
     },
     select: { id: true },
   });
   if (found.length !== unique.length) {
     throw new SessionActionError(
       "PLAYERS_OUTSIDE_GROUP",
-      "One or more selected players do not belong to this group",
+      "One or more selected players are not eligible for this group",
     );
   }
   return unique;
+}
+
+/**
+ * Lock the PlaySession row for the rest of the transaction and return its
+ * current status. `SELECT ... FOR UPDATE` serializes status mutations:
+ * attendance edits and `startSession` can no longer interleave, so the
+ * "roster frozen once ACTIVE" rule holds under concurrency.
+ */
+async function lockSessionStatus(
+  tx: Pick<typeof prisma, "$queryRaw">,
+  sessionId: string,
+): Promise<string | null> {
+  const rows = await tx.$queryRaw<Array<{ status: string }>>`
+    SELECT "status" FROM "PlaySession" WHERE "id" = ${sessionId} FOR UPDATE
+  `;
+  return rows[0]?.status ?? null;
 }
 
 /**
@@ -137,8 +155,12 @@ async function requireSessionInGroup(sessionId: string, groupId: string) {
 /**
  * Replace a PLANNED session's available-player set. Adds new SessionPlayer
  * rows (status AVAILABLE, appended check-in order) and removes ones no longer
- * selected. Once a session is ACTIVE the roster is frozen here — players move
- * via match flow in later phases.
+ * selected. Once a session is ACTIVE the roster is frozen here.
+ *
+ * Race-safety: the PlaySession row is locked with `SELECT ... FOR UPDATE` and
+ * the PLANNED status re-checked *inside* the transaction. A concurrent
+ * `startSession` therefore cannot flip the status mid-write — whichever
+ * transaction gets the lock first wins; the other sees the updated status.
  */
 export async function setSessionAttendance(params: {
   groupId: string;
@@ -146,6 +168,7 @@ export async function setSessionAttendance(params: {
   sessionId: string;
   playerIds: string[];
 }): Promise<void> {
+  // Fast-fail on group ownership + obvious wrong status (cheap, pre-tx).
   const session = await requireSessionInGroup(
     params.sessionId,
     params.groupId,
@@ -163,24 +186,35 @@ export async function setSessionAttendance(params: {
   );
   const desiredSet = new Set(desired);
 
-  const existing = await prisma.sessionPlayer.findMany({
-    where: { sessionId: session.id },
-    select: { id: true, playerProfileId: true, checkInOrder: true },
-  });
-  const existingByPlayer = new Map(
-    existing.map((sp) => [sp.playerProfileId, sp]),
-  );
-
-  const toRemove = existing.filter(
-    (sp) => !desiredSet.has(sp.playerProfileId),
-  );
-  const toAdd = desired.filter((id) => !existingByPlayer.has(id));
-  if (toRemove.length === 0 && toAdd.length === 0) return;
-
-  let nextOrder =
-    existing.reduce((max, sp) => Math.max(max, sp.checkInOrder), 0) + 1;
-
   await prisma.$transaction(async (tx) => {
+    // Authoritative status check, under a row lock.
+    const lockedStatus = await lockSessionStatus(tx, session.id);
+    if (lockedStatus === null) {
+      throw new NotFoundError("Session not found in this group");
+    }
+    if (lockedStatus !== PlaySessionStatus.PLANNED) {
+      throw new SessionActionError(
+        "NOT_PLANNED",
+        "Attendance can only be edited while the session is planned",
+      );
+    }
+
+    const existing = await tx.sessionPlayer.findMany({
+      where: { sessionId: session.id },
+      select: { id: true, playerProfileId: true, checkInOrder: true },
+    });
+    const existingByPlayer = new Map(
+      existing.map((sp) => [sp.playerProfileId, sp]),
+    );
+    const toRemove = existing.filter(
+      (sp) => !desiredSet.has(sp.playerProfileId),
+    );
+    const toAdd = desired.filter((id) => !existingByPlayer.has(id));
+    if (toRemove.length === 0 && toAdd.length === 0) return;
+
+    let nextOrder =
+      existing.reduce((max, sp) => Math.max(max, sp.checkInOrder), 0) + 1;
+
     if (toRemove.length > 0) {
       await tx.sessionPlayer.deleteMany({
         where: { id: { in: toRemove.map((sp) => sp.id) } },
@@ -210,7 +244,13 @@ export async function setSessionAttendance(params: {
   });
 }
 
-/** Move a PLANNED session to ACTIVE. Requires at least one player. */
+/**
+ * Move a PLANNED session to ACTIVE. Requires at least one player.
+ *
+ * Race-safety: same as `setSessionAttendance` — the PlaySession row is locked
+ * and PLANNED re-checked inside the transaction, so a concurrent attendance
+ * edit or double-start can't slip through.
+ */
 export async function startSession(params: {
   groupId: string;
   actorUserId: string;
@@ -227,17 +267,28 @@ export async function startSession(params: {
     );
   }
 
-  const playerCount = await prisma.sessionPlayer.count({
-    where: { sessionId: session.id },
-  });
-  if (playerCount === 0) {
-    throw new SessionActionError(
-      "NO_PLAYERS",
-      "Add at least one player before starting the session",
-    );
-  }
-
   await prisma.$transaction(async (tx) => {
+    const lockedStatus = await lockSessionStatus(tx, session.id);
+    if (lockedStatus === null) {
+      throw new NotFoundError("Session not found in this group");
+    }
+    if (lockedStatus !== PlaySessionStatus.PLANNED) {
+      throw new SessionActionError(
+        "NOT_PLANNED",
+        "Only a planned session can be started",
+      );
+    }
+
+    const playerCount = await tx.sessionPlayer.count({
+      where: { sessionId: session.id },
+    });
+    if (playerCount === 0) {
+      throw new SessionActionError(
+        "NO_PLAYERS",
+        "Add at least one player before starting the session",
+      );
+    }
+
     await tx.playSession.update({
       where: { id: session.id },
       data: { status: PlaySessionStatus.ACTIVE },

@@ -114,13 +114,22 @@ export async function setAttendanceAction(
   return {};
 }
 
-export async function startSessionAction(formData: FormData) {
+export async function startSessionAction(
+  _prev: SessionActionState,
+  formData: FormData,
+): Promise<SessionActionState> {
   const groupId = String(formData.get("groupId") ?? "");
   const sessionId = String(formData.get("sessionId") ?? "");
-  if (!groupId || !sessionId) throw new Error("Missing groupId or sessionId");
+  if (!groupId || !sessionId) return { error: "Missing groupId or sessionId" };
 
   const { userId } = await requireGroupRole(groupId, OWNERS_AND_ADMINS);
-  await startSession({ groupId, actorUserId: userId, sessionId });
+
+  try {
+    await startSession({ groupId, actorUserId: userId, sessionId });
+  } catch (err) {
+    return { error: toMessage(err) };
+  }
 
   revalidatePath(`/groups/${groupId}/sessions/${sessionId}`);
+  return {};
 }

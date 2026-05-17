@@ -8,15 +8,20 @@ import {
 
 const { prismaMock, txMocks } = vi.hoisted(() => {
   const txMocks = {
+    $queryRaw: vi.fn(),
     playSession: { create: vi.fn(), update: vi.fn() },
     court: { createMany: vi.fn() },
-    sessionPlayer: { createMany: vi.fn(), deleteMany: vi.fn() },
+    sessionPlayer: {
+      createMany: vi.fn(),
+      deleteMany: vi.fn(),
+      findMany: vi.fn(),
+      count: vi.fn(),
+    },
     activityLog: { create: vi.fn() },
   };
   const prismaMock = {
     playerProfile: { findMany: vi.fn() },
     playSession: { findUnique: vi.fn() },
-    sessionPlayer: { findMany: vi.fn(), count: vi.fn() },
     $transaction: vi.fn(async (fn: (tx: typeof txMocks) => unknown) =>
       fn(txMocks),
     ),
@@ -117,6 +122,27 @@ describe("createSession", () => {
     ).rejects.toMatchObject({ code: "PLAYERS_OUTSIDE_GROUP" });
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
+
+  it("only accepts ACTIVE/TEMPORARY players (INACTIVE filtered out by the query)", async () => {
+    // The eligibility filter lives in the Prisma `where`; an INACTIVE player
+    // simply won't be returned, so the count mismatch triggers the rejection.
+    prismaMock.playerProfile.findMany.mockResolvedValue([{ id: "p_active" }]);
+    await expect(
+      createSession({
+        groupId: "g_1",
+        actorUserId: "u_admin",
+        input: { ...baseInput, playerIds: ["p_active", "p_inactive"] },
+      }),
+    ).rejects.toMatchObject({ code: "PLAYERS_OUTSIDE_GROUP" });
+    // Confirm the query is gated on ACTIVE/TEMPORARY.
+    expect(prismaMock.playerProfile.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["ACTIVE", "TEMPORARY"] },
+        }),
+      }),
+    );
+  });
 });
 
 describe("setSessionAttendance", () => {
@@ -127,6 +153,24 @@ describe("setSessionAttendance", () => {
       groupId: "g_1",
       status: PlaySessionStatus.PLANNED,
     });
+    // The locking SELECT inside the tx returns PLANNED by default.
+    txMocks.$queryRaw.mockResolvedValue([
+      { status: PlaySessionStatus.PLANNED },
+    ]);
+    txMocks.sessionPlayer.findMany.mockResolvedValue([]);
+  });
+
+  it("locks the session row with SELECT ... FOR UPDATE", async () => {
+    prismaMock.playerProfile.findMany.mockResolvedValue([]);
+    await setSessionAttendance({
+      groupId: "g_1",
+      actorUserId: "u_admin",
+      sessionId: "ses_1",
+      playerIds: [],
+    });
+    const sql = (txMocks.$queryRaw.mock.calls[0]?.[0] as string[]).join("?");
+    expect(sql).toContain("FOR UPDATE");
+    expect(sql).toContain('"PlaySession"');
   });
 
   it("adds new players and removes deselected ones", async () => {
@@ -134,7 +178,7 @@ describe("setSessionAttendance", () => {
       { id: "p_1" },
       { id: "p_3" },
     ]);
-    prismaMock.sessionPlayer.findMany.mockResolvedValue([
+    txMocks.sessionPlayer.findMany.mockResolvedValue([
       { id: "sp_1", playerProfileId: "p_1", checkInOrder: 1 },
       { id: "sp_2", playerProfileId: "p_2", checkInOrder: 2 },
     ]);
@@ -154,7 +198,7 @@ describe("setSessionAttendance", () => {
     });
   });
 
-  it("refuses to edit a non-PLANNED session", async () => {
+  it("refuses to edit a non-PLANNED session (pre-tx fast-fail)", async () => {
     prismaMock.playSession.findUnique.mockResolvedValue({
       id: "ses_1",
       groupId: "g_1",
@@ -168,6 +212,25 @@ describe("setSessionAttendance", () => {
         playerIds: ["p_1"],
       }),
     ).rejects.toMatchObject({ code: "NOT_PLANNED" });
+  });
+
+  it("aborts if the session flips to ACTIVE inside the transaction (race)", async () => {
+    // Pre-tx read still says PLANNED, but the locked read sees ACTIVE —
+    // a concurrent startSession committed first.
+    prismaMock.playerProfile.findMany.mockResolvedValue([]);
+    txMocks.$queryRaw.mockResolvedValue([
+      { status: PlaySessionStatus.ACTIVE },
+    ]);
+    await expect(
+      setSessionAttendance({
+        groupId: "g_1",
+        actorUserId: "u_admin",
+        sessionId: "ses_1",
+        playerIds: [],
+      }),
+    ).rejects.toMatchObject({ code: "NOT_PLANNED" });
+    expect(txMocks.sessionPlayer.deleteMany).not.toHaveBeenCalled();
+    expect(txMocks.sessionPlayer.createMany).not.toHaveBeenCalled();
   });
 
   it("rejects a session from another group", async () => {
@@ -195,10 +258,13 @@ describe("startSession", () => {
       groupId: "g_1",
       status: PlaySessionStatus.PLANNED,
     });
+    txMocks.$queryRaw.mockResolvedValue([
+      { status: PlaySessionStatus.PLANNED },
+    ]);
   });
 
   it("moves a planned session with players to ACTIVE", async () => {
-    prismaMock.sessionPlayer.count.mockResolvedValue(4);
+    txMocks.sessionPlayer.count.mockResolvedValue(4);
     await startSession({
       groupId: "g_1",
       actorUserId: "u_admin",
@@ -211,7 +277,7 @@ describe("startSession", () => {
   });
 
   it("refuses to start a session with no players", async () => {
-    prismaMock.sessionPlayer.count.mockResolvedValue(0);
+    txMocks.sessionPlayer.count.mockResolvedValue(0);
     await expect(
       startSession({
         groupId: "g_1",
@@ -219,9 +285,24 @@ describe("startSession", () => {
         sessionId: "ses_1",
       }),
     ).rejects.toMatchObject({ code: "NO_PLAYERS" });
+    expect(txMocks.playSession.update).not.toHaveBeenCalled();
   });
 
-  it("refuses to start a non-PLANNED session", async () => {
+  it("aborts if the session is no longer PLANNED inside the lock (race)", async () => {
+    txMocks.$queryRaw.mockResolvedValue([
+      { status: PlaySessionStatus.ACTIVE },
+    ]);
+    await expect(
+      startSession({
+        groupId: "g_1",
+        actorUserId: "u_admin",
+        sessionId: "ses_1",
+      }),
+    ).rejects.toMatchObject({ code: "NOT_PLANNED" });
+    expect(txMocks.playSession.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses to start a non-PLANNED session (pre-tx fast-fail)", async () => {
     prismaMock.playSession.findUnique.mockResolvedValue({
       id: "ses_1",
       groupId: "g_1",

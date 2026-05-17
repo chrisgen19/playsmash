@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { LocalDateTime } from "@/components/shared/local-datetime";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,7 +98,7 @@ export default async function SessionsPage({
                     <StatusBadge status={s.status} />
                   </div>
                   <CardDescription>
-                    {s.date.toISOString().slice(0, 16).replace("T", " ")}
+                    <LocalDateTime iso={s.date.toISOString()} />
                     {s.location ? ` · ${s.location}` : ""}
                   </CardDescription>
                 </CardHeader>
