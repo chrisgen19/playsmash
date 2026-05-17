@@ -20,12 +20,16 @@ export function RegisterForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-5">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Create your account</h1>
-        <p className="text-muted-foreground text-sm">
+    <form action={formAction} className="space-y-7">
+      <header className="space-y-2">
+        <p className="md-label-lg text-primary">Get started</p>
+        <h1 className="md-headline-md text-foreground">Create your account</h1>
+        <p className="md-body-md text-muted-foreground">
           Already have one?{" "}
-          <Link href="/login" className="text-foreground underline">
+          <Link
+            href="/login"
+            className="text-primary underline underline-offset-4"
+          >
             Sign in
           </Link>
           .
@@ -33,8 +37,10 @@ export function RegisterForm() {
       </header>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="firstName">First name</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="firstName" className="md-label-md">
+            First name
+          </Label>
           <Input
             id="firstName"
             name="firstName"
@@ -43,14 +49,16 @@ export function RegisterForm() {
             maxLength={40}
           />
           {state.fieldErrors?.firstName && (
-            <p className="text-destructive text-sm">
+            <p className="md-body-sm text-[color:var(--md-sys-color-error)]">
               {state.fieldErrors.firstName}
             </p>
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="lastName">Last name</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="lastName" className="md-label-md">
+            Last name
+          </Label>
           <Input
             id="lastName"
             name="lastName"
@@ -59,15 +67,17 @@ export function RegisterForm() {
             maxLength={40}
           />
           {state.fieldErrors?.lastName && (
-            <p className="text-destructive text-sm">
+            <p className="md-body-sm text-[color:var(--md-sys-color-error)]">
               {state.fieldErrors.lastName}
             </p>
           )}
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="email" className="md-label-md">
+          Email
+        </Label>
         <Input
           id="email"
           name="email"
@@ -76,12 +86,16 @@ export function RegisterForm() {
           required
         />
         {state.fieldErrors?.email && (
-          <p className="text-destructive text-sm">{state.fieldErrors.email}</p>
+          <p className="md-body-sm text-[color:var(--md-sys-color-error)]">
+            {state.fieldErrors.email}
+          </p>
         )}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
+      <div className="space-y-1.5">
+        <Label htmlFor="password" className="md-label-md">
+          Password
+        </Label>
         <Input
           id="password"
           name="password"
@@ -91,19 +105,28 @@ export function RegisterForm() {
           minLength={8}
         />
         {state.fieldErrors?.password && (
-          <p className="text-destructive text-sm">
+          <p className="md-body-sm text-[color:var(--md-sys-color-error)]">
             {state.fieldErrors.password}
           </p>
         )}
       </div>
 
       {state.error && (
-        <p className="text-destructive text-sm" role="alert">
+        <p
+          className="md-body-sm rounded-md bg-[color:var(--md-sys-color-error-container)] px-3 py-2 text-[color:var(--md-sys-color-on-error-container)]"
+          role="alert"
+        >
           {state.error}
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button
+        type="submit"
+        variant="filled"
+        size="lg"
+        disabled={pending}
+        className="w-full"
+      >
         {pending ? "Creating account…" : "Create account"}
       </Button>
     </form>
