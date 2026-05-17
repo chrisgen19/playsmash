@@ -226,19 +226,34 @@ export default async function SessionDetailPage({
         </CardContent>
       </Card>
 
-      <Link
-        href={`/groups/${groupId}/sessions/${session.id}/stacking`}
-        className="mt-4 block"
-      >
-        <Card className="hover:border-foreground/20 transition-colors">
-          <CardHeader>
-            <CardTitle className="text-base">Stacking →</CardTitle>
-            <CardDescription>
-              View the current round, generate the next, see who&apos;s resting.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </Link>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Link
+          href={`/groups/${groupId}/sessions/${session.id}/stacking`}
+          className="block"
+        >
+          <Card className="hover:border-foreground/20 h-full transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base">Stacking →</CardTitle>
+              <CardDescription>
+                Current round, court assignments, generate the next round.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link
+          href={`/groups/${groupId}/sessions/${session.id}/scores`}
+          className="block"
+        >
+          <Card className="hover:border-foreground/20 h-full transition-colors">
+            <CardHeader>
+              <CardTitle className="text-base">Scores →</CardTitle>
+              <CardDescription>
+                Start matches, enter scores, edit completed results.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+      </div>
     </main>
   );
 }

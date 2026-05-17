@@ -255,6 +255,7 @@ Unit tests (Vitest) cover the critical pure logic and services:
 - **Players** — temp creation, status changes, temp→user linking guards, TEMPORARY transition guard.
 - **Sessions** — atomic create + courts + check-in order, eligibility filter (`ACTIVE`/`TEMPORARY`), `FOR UPDATE` locked status checks, no-players + non-PLANNED guards.
 - **Stacking** (Phase 4) — 4/1, 8/2, 9/2-with-rest invariants; repeated-partner & replay penalties; fair rotation (`max − min ≤ 1` over 9 rounds with 9 players / 2 courts); no duplicate player per round; determinism with fixed seed.
+- **Scoring** (Phase 5) — pure `validateScore` rule matrix (non-integer / negative / tied / below-points-to-win / win-by-two); service tests for start/complete/cancel/edit with locked status re-check.
 - **Activity log** — writer payload + transaction passthrough.
 - **OAuth** — `email_verified` gate; **callback URLs** — open-redirect prevention.
 
@@ -312,14 +313,16 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 - [x] Court cards UI + waiting / resting lists at `/sessions/[sessionId]/stacking`
 - [x] Unit tests: 4/1, 8/2, 9/2-with-rest, repeated-partner & replay penalties, fair rotation, no duplicate per round, deterministic seed
 
-### ⬜ Phase 5 — Scoring & match lifecycle
+### ✅ Phase 5 — Scoring & match lifecycle
 
-- [ ] Start match, enter scores, validate, complete
-- [ ] Winner determination (points-to-win, win-by-two)
-- [ ] Update player statuses after a match
-- [ ] Completed matches view
-- [ ] Admin score editing with activity log
-- [ ] Scoring validation tests
+- [x] Start match (QUEUED → ACTIVE) under a row lock
+- [x] Complete match (ACTIVE → COMPLETED) with full score validation
+- [x] Cancel match (QUEUED/ACTIVE → CANCELLED)
+- [x] Winner determination — pure `validateScore` for `pointsToWin` + `winByTwo`
+- [x] Update player statuses after match (PLAYING → WAITING); free the court
+- [x] `/scores` page with active / queued / completed sections
+- [x] Admin score editing with activity log (idempotent, validated)
+- [x] Scoring validation + service tests, including concurrency abort
 
 ### ⬜ Phase 6 — Player stats & history
 
