@@ -6,7 +6,24 @@
       "Bash(PGPASSWORD=mypassword psql *)",
       "Bash(pnpm -v)",
       "Bash(git --version)",
-      "Bash(pnpm create *)"
+      "Bash(pnpm create *)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm add *)",
+      "Bash(pnpm remove *)",
+      "Bash(pnpm approve-builds *)",
+      "Bash(pnpm exec *)",
+      "Bash(pnpm dlx *)",
+      "Bash(tee /tmp/shadcn-form.log)",
+      "Bash(echo \"--- exit=$?\")",
+      "Bash(grep -q '^\\\\.env$' .gitignore)",
+      "Bash(grep -q '^\\\\.env\\\\.local$' .gitignore)",
+      "Bash(openssl rand *)",
+      "Bash(pnpm view *)",
+      "Bash(pnpm lint *)",
+      "Bash(pnpm build *)",
+      "Bash(git checkout *)",
+      "Bash(git remote *)",
+      "Bash(git add *)"
     ]
   }
 }

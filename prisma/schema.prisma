@@ -1,0 +1,215 @@
+// Playsmash — Phase 1 schema
+// Auth.js (User/Account/Session/VerificationToken) + group/membership/player core.
+// Session play models (Court, SessionPlayer, Match, ScoreEvent, ActivityLog) arrive in later phases.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// -----------------------------------------------------------------------------
+// Auth.js (NextAuth v5) models
+// -----------------------------------------------------------------------------
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts           Account[]
+  sessions           Session[]
+  groupsCreated      Group[]         @relation("GroupCreatedBy")
+  groupMemberships   GroupMember[]
+  playerProfiles     PlayerProfile[] @relation("PlayerProfileUser")
+  playerProfilesByMe PlayerProfile[] @relation("PlayerProfileCreatedBy")
+  invitesCreated     Invite[]        @relation("InviteCreatedBy")
+  joinRequests       JoinRequest[]
+
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// -----------------------------------------------------------------------------
+// Domain — groups, members, players, invites, join requests
+// -----------------------------------------------------------------------------
+
+enum GroupVisibility {
+  PRIVATE
+  INVITE_ONLY
+  PUBLIC
+}
+
+enum GroupRole {
+  OWNER
+  ADMIN
+  PLAYER
+  VIEWER
+}
+
+enum GroupMemberStatus {
+  ACTIVE
+  INVITED
+  LEFT
+  REMOVED
+  BANNED
+}
+
+enum PlayerStatus {
+  ACTIVE
+  INACTIVE
+  TEMPORARY
+  REMOVED
+}
+
+enum InviteStatus {
+  ACTIVE
+  DISABLED
+  EXPIRED
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model Group {
+  id              String          @id @default(cuid())
+  name            String
+  description     String?
+  createdByUserId String
+  joinCode        String          @unique
+  visibility      GroupVisibility @default(INVITE_ONLY)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  createdBy    User            @relation("GroupCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  members      GroupMember[]
+  players      PlayerProfile[]
+  invites      Invite[]
+  joinRequests JoinRequest[]
+
+  @@index([createdByUserId])
+}
+
+model GroupMember {
+  id        String            @id @default(cuid())
+  groupId   String
+  userId    String
+  role      GroupRole         @default(PLAYER)
+  status    GroupMemberStatus @default(ACTIVE)
+  joinedAt  DateTime          @default(now())
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@index([role])
+}
+
+model PlayerProfile {
+  id              String       @id @default(cuid())
+  groupId         String
+  userId          String?
+  displayName     String
+  skillLevel      Float?
+  gender          String?
+  handedness      String?
+  notes           String?
+  status          PlayerStatus @default(ACTIVE)
+  createdByUserId String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User? @relation("PlayerProfileUser", fields: [userId], references: [id], onDelete: SetNull)
+  createdBy User? @relation("PlayerProfileCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model Invite {
+  id              String       @id @default(cuid())
+  groupId         String
+  code            String       @unique
+  createdByUserId String
+  expiresAt       DateTime?
+  maxUses         Int?
+  usedCount       Int          @default(0)
+  status          InviteStatus @default(ACTIVE)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User  @relation("InviteCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([groupId])
+}
+
+model JoinRequest {
+  id        String            @id @default(cuid())
+  groupId   String
+  userId    String
+  status    JoinRequestStatus @default(PENDING)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+}
