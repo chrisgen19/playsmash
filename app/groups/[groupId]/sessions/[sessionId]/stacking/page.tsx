@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { GenerateRoundButton } from "@/components/sessions/generate-round-button";
+import { MatchControls } from "@/components/sessions/match-controls";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -164,6 +165,24 @@ export default async function StackingPage({
                   label="Team 2"
                   names={[m.team2P1.displayName, m.team2P2?.displayName]}
                 />
+                {canManage &&
+                  (m.status === MatchStatus.QUEUED ||
+                    m.status === MatchStatus.ACTIVE) && (
+                    <MatchControls
+                      groupId={groupId}
+                      sessionId={sessionId}
+                      matchId={m.id}
+                      showStart={m.status === MatchStatus.QUEUED}
+                    />
+                  )}
+                {m.status === MatchStatus.ACTIVE && (
+                  <Link
+                    href={`/groups/${groupId}/sessions/${sessionId}/scores`}
+                    className="text-foreground text-xs underline"
+                  >
+                    Enter score →
+                  </Link>
+                )}
               </CardContent>
             </Card>
           ))}

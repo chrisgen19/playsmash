@@ -26,6 +26,11 @@ export const ActivityAction = {
   SESSION_STARTED: "session.started",
   SESSION_PLAYERS_UPDATED: "session.players_updated",
   SESSION_ROUND_GENERATED: "session.round_generated",
+  // matches
+  MATCH_STARTED: "match.started",
+  MATCH_COMPLETED: "match.completed",
+  MATCH_CANCELLED: "match.cancelled",
+  MATCH_SCORE_EDITED: "match.score_edited",
 } as const;
 
 export type ActivityActionValue =
