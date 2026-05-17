@@ -226,14 +226,19 @@ export default async function SessionDetailPage({
         </CardContent>
       </Card>
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle className="text-base">Matches</CardTitle>
-          <CardDescription>
-            Court rotation and stacking arrive in Phase 4.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <Link
+        href={`/groups/${groupId}/sessions/${session.id}/stacking`}
+        className="mt-4 block"
+      >
+        <Card className="hover:border-foreground/20 transition-colors">
+          <CardHeader>
+            <CardTitle className="text-base">Stacking →</CardTitle>
+            <CardDescription>
+              View the current round, generate the next, see who&apos;s resting.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </Link>
     </main>
   );
 }

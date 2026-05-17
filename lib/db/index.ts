@@ -13,6 +13,8 @@ export {
   PlaySessionStatus,
   CourtStatus,
   SessionPlayerStatus,
+  WinningTeam,
+  MatchStatus,
 } from "./generated/enums";
 export { Prisma } from "./generated/client";
 export type {
@@ -26,4 +28,5 @@ export type {
   PlaySession,
   Court,
   SessionPlayer,
+  Match,
 } from "./generated/client";

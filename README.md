@@ -199,8 +199,9 @@ Implemented so far (Phases 1–2):
 | `PlaySession` | A scheduled play day — courts, scoring rules, status. Named `PlaySession` because Auth.js owns `Session`. |
 | `Court` | A court within a session. |
 | `SessionPlayer` | A player checked in to a session. Unique on `(sessionId, playerProfileId)`. |
+| `Match` | A generated doubles match — `sessionId`, `courtId?`, `roundNumber`, four team slots, scores, `winningTeam?`, `status`. |
 
-Planned (Phase 4+): `Match`, `ScoreEvent`.
+Planned (Phase 5+): `ScoreEvent`.
 
 ---
 
@@ -249,13 +250,13 @@ Unit tests (Vitest) cover the critical pure logic and services:
 - **Permissions** — role hierarchy + `roleSatisfiesAny`.
 - **Join codes** — format, ambiguity-free alphabet, uniqueness, retry/exhaustion.
 - **Create group** — atomic Group + Owner + PlayerProfile + Invite composition.
-- **Join group** — invalid/disabled/expired/max-used codes, idempotency, member/profile revival, banned users.
+- **Join group** — invalid/disabled/expired/max-used codes, idempotency, member/profile revival, banned users, `FOR UPDATE` lock + P2002 fallback.
 - **Members** — role-change and removal rules (owner protection, admin-vs-admin).
-- **Players** — temp creation, status changes, temp→user linking guards.
+- **Players** — temp creation, status changes, temp→user linking guards, TEMPORARY transition guard.
+- **Sessions** — atomic create + courts + check-in order, eligibility filter (`ACTIVE`/`TEMPORARY`), `FOR UPDATE` locked status checks, no-players + non-PLANNED guards.
+- **Stacking** (Phase 4) — 4/1, 8/2, 9/2-with-rest invariants; repeated-partner & replay penalties; fair rotation (`max − min ≤ 1` over 9 rounds with 9 players / 2 courts); no duplicate player per round; determinism with fixed seed.
 - **Activity log** — writer payload + transaction passthrough.
 - **OAuth** — `email_verified` gate; **callback URLs** — open-redirect prevention.
-
-The Phase 4 stacking algorithm will be a pure function with its own dedicated test suite.
 
 ---
 
@@ -301,15 +302,15 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 - [x] Validation, server-side authorization, activity logs
 - [x] Tests for session services
 
-### ⬜ Phase 4 — Stacking & shuffle generation
+### ✅ Phase 4 — Stacking & shuffle generation
 
-- [ ] `Match` model
-- [ ] Stacking algorithm as pure functions (`generateRoundMatches`, `scoreCandidateMatch`, …)
-- [ ] Generate round matches from available players + court count
-- [ ] Assign matches to courts, track round numbers
-- [ ] Mark players PLAYING / WAITING / RESTING
-- [ ] Court cards UI + waiting players
-- [ ] Unit tests: 4/1, 8/2, 9/2-with-rest, repeated-partner penalty, fair rotation, no duplicates
+- [x] `Match` model (+ `WinningTeam`, `MatchStatus` enums) + migration
+- [x] Stacking algorithm as pure functions in `lib/stacking/` — `generateRoundMatches`, `selectPlayersForRound`, `assignPlayersToCourts`, `scoreCandidateMatch`, `buildPairingHistory`, `getSessionPlayerStats`, seedable `mulberry32` RNG
+- [x] Generate round matches from available players + court count
+- [x] Assign matches to courts, track round numbers
+- [x] Mark players PLAYING / WAITING / RESTING in one transaction
+- [x] Court cards UI + waiting / resting lists at `/sessions/[sessionId]/stacking`
+- [x] Unit tests: 4/1, 8/2, 9/2-with-rest, repeated-partner & replay penalties, fair rotation, no duplicate per round, deterministic seed
 
 ### ⬜ Phase 5 — Scoring & match lifecycle
 
