@@ -336,11 +336,11 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 - [x] Temporary players included in stats (no `userId` required)
 - [x] Zero-game players sort to the bottom with `winPct = 0`
 
-### ⬜ Phase 7 — Realtime / live session UX
+### ✅ Phase 7 — Realtime / live session UX
 
-- [ ] Auto-refresh / realtime stacking & score updates
-- [ ] Mobile-friendly court assignment display
-- [ ] Clear visual match/player states
+- [x] Auto-refresh / realtime stacking & score updates
+- [x] Mobile-friendly court assignment display
+- [x] Clear visual match/player states
 
 ### ⬜ Phase 8 — Admin polish, audit & deployment
 

@@ -2,11 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { EditAttendanceForm } from "@/components/sessions/edit-attendance-form";
+import { LiveSessionRefresh } from "@/components/sessions/live-session-refresh";
+import {
+  CourtStatusBadge,
+  PlayerStateChip,
+  SessionStatusBadge,
+} from "@/components/sessions/session-state";
 import { StartSessionButton } from "@/components/sessions/start-session-button";
 import { LocalDateTime } from "@/components/shared/local-datetime";
 import { LeaderboardTable } from "@/components/stats/leaderboard-table";
 import { getSessionLeaderboard } from "@/lib/stats/queries";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -110,24 +115,25 @@ export default async function SessionDetailPage({
             <h1 className="text-2xl font-semibold tracking-tight">
               {session.name}
             </h1>
-            <Badge
-              variant={isPlanned ? "secondary" : "default"}
-            >
-              {session.status}
-            </Badge>
+            <SessionStatusBadge status={session.status} />
           </div>
           <p className="text-muted-foreground text-sm">
             <LocalDateTime iso={session.date.toISOString()} />
             {session.location ? ` · ${session.location}` : ""}
           </p>
         </div>
-        {canManage && isPlanned && (
-          <StartSessionButton
-            groupId={groupId}
-            sessionId={session.id}
-            disabled={session.players.length === 0}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <LiveSessionRefresh
+            enabled={session.status === PlaySessionStatus.ACTIVE}
           />
-        )}
+          {canManage && isPlanned && (
+            <StartSessionButton
+              groupId={groupId}
+              sessionId={session.id}
+              disabled={session.players.length === 0}
+            />
+          )}
+        </div>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -144,9 +150,7 @@ export default async function SessionDetailPage({
         <Card>
           <CardHeader>
             <CardDescription>Courts</CardDescription>
-            <CardTitle className="text-lg">
-              {session.numberOfCourts}
-            </CardTitle>
+            <CardTitle className="text-lg">{session.numberOfCourts}</CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground text-xs">
             {session.courts.map((c) => c.name).join(", ")}
@@ -155,9 +159,7 @@ export default async function SessionDetailPage({
         <Card>
           <CardHeader>
             <CardDescription>Players</CardDescription>
-            <CardTitle className="text-lg">
-              {session.players.length}
-            </CardTitle>
+            <CardTitle className="text-lg">{session.players.length}</CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground text-xs">
             Checked in for this session.
@@ -197,14 +199,14 @@ export default async function SessionDetailPage({
               if (inGroup.length === 0) return null;
               return (
                 <div key={status}>
-                  <p className="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wide">
+                  <p className="text-muted-foreground mb-1 text-xs font-medium tracking-wide uppercase">
                     {label} ({inGroup.length})
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {inGroup.map((sp) => (
-                      <Badge key={sp.id} variant="outline">
+                      <PlayerStateChip key={sp.id} status={sp.status}>
                         {sp.player.displayName}
-                      </Badge>
+                      </PlayerStateChip>
                     ))}
                   </div>
                 </div>
@@ -222,12 +224,10 @@ export default async function SessionDetailPage({
           {session.courts.map((c) => (
             <div
               key={c.id}
-              className="border-border/60 rounded-lg border px-3 py-2 text-sm"
+              className="border-border/60 flex min-h-16 flex-col justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
             >
               <span className="font-medium">{c.name}</span>
-              <span className="text-muted-foreground ml-2 text-xs">
-                {c.status}
-              </span>
+              <CourtStatusBadge status={c.status} />
             </div>
           ))}
         </CardContent>

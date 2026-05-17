@@ -2,9 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { EditScoreForm } from "@/components/sessions/edit-score-form";
+import { LiveSessionRefresh } from "@/components/sessions/live-session-refresh";
 import { MatchControls } from "@/components/sessions/match-controls";
 import { ScoreEntryForm } from "@/components/sessions/score-entry-form";
-import { Badge } from "@/components/ui/badge";
+import { MatchStatusBadge } from "@/components/sessions/session-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,6 +19,7 @@ import {
   prisma,
   GroupRole,
   MatchStatus,
+  PlaySessionStatus,
   WinningTeam,
 } from "@/lib/db";
 import { getGroupRole } from "@/lib/permissions/group";
@@ -39,6 +41,7 @@ export default async function ScoresPage({
       id: true,
       groupId: true,
       name: true,
+      status: true,
       pointsToWin: true,
       winByTwo: true,
     },
@@ -77,12 +80,17 @@ export default async function ScoresPage({
         </Button>
       </div>
 
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Scores</h1>
-        <p className="text-muted-foreground text-sm">
-          {session.name} · first to {session.pointsToWin}
-          {session.winByTwo ? ", win by two" : ""}.
-        </p>
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Scores</h1>
+          <p className="text-muted-foreground text-sm">
+            {session.name} · first to {session.pointsToWin}
+            {session.winByTwo ? ", win by two" : ""}.
+          </p>
+        </div>
+        <LiveSessionRefresh
+          enabled={session.status === PlaySessionStatus.ACTIVE}
+        />
       </div>
 
       <SectionHeading
@@ -100,25 +108,27 @@ export default async function ScoresPage({
       ) : (
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           {active.map((m) => (
-            <Card key={m.id}>
+            <Card key={m.id} className="overflow-hidden">
               <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base">Match</CardTitle>
+                  <MatchStatusBadge status={m.status} />
+                </div>
                 <CardDescription>
                   Round {m.roundNumber} · {m.court?.name ?? "Unassigned"}
                 </CardDescription>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Match</CardTitle>
-                  <Badge>{m.status}</Badge>
-                </div>
               </CardHeader>
               <CardContent className="space-y-3">
-                <TeamLine
-                  label="Team 1"
-                  names={[m.team1P1.displayName, m.team1P2?.displayName]}
-                />
-                <TeamLine
-                  label="Team 2"
-                  names={[m.team2P1.displayName, m.team2P2?.displayName]}
-                />
+                <div className="grid gap-2 min-[420px]:grid-cols-2">
+                  <TeamLine
+                    label="Team 1"
+                    names={[m.team1P1.displayName, m.team1P2?.displayName]}
+                  />
+                  <TeamLine
+                    label="Team 2"
+                    names={[m.team2P1.displayName, m.team2P2?.displayName]}
+                  />
+                </div>
                 {canManage ? (
                   <ScoreEntryForm
                     groupId={groupId}
@@ -146,25 +156,27 @@ export default async function ScoresPage({
       ) : (
         <div className="mb-6 grid gap-3 md:grid-cols-2">
           {queued.map((m) => (
-            <Card key={m.id}>
+            <Card key={m.id} className="overflow-hidden">
               <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base">Match</CardTitle>
+                  <MatchStatusBadge status={m.status} />
+                </div>
                 <CardDescription>
                   Round {m.roundNumber} · {m.court?.name ?? "Unassigned"}
                 </CardDescription>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Match</CardTitle>
-                  <Badge variant="secondary">{m.status}</Badge>
-                </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <TeamLine
-                  label="Team 1"
-                  names={[m.team1P1.displayName, m.team1P2?.displayName]}
-                />
-                <TeamLine
-                  label="Team 2"
-                  names={[m.team2P1.displayName, m.team2P2?.displayName]}
-                />
+                <div className="grid gap-2 min-[420px]:grid-cols-2">
+                  <TeamLine
+                    label="Team 1"
+                    names={[m.team1P1.displayName, m.team1P2?.displayName]}
+                  />
+                  <TeamLine
+                    label="Team 2"
+                    names={[m.team2P1.displayName, m.team2P2?.displayName]}
+                  />
+                </div>
                 {canManage && (
                   <MatchControls
                     groupId={groupId}
@@ -195,7 +207,7 @@ export default async function ScoresPage({
                 className="flex flex-wrap items-center justify-between gap-3 py-3"
               >
                 <div className="min-w-0">
-                  <p className="text-muted-foreground text-xs uppercase tracking-wider">
+                  <p className="text-muted-foreground text-xs tracking-wider uppercase">
                     Round {m.roundNumber}
                     {m.court?.name ? ` · ${m.court.name}` : ""}
                   </p>
@@ -244,7 +256,7 @@ export default async function ScoresPage({
 function SectionHeading({ title, helper }: { title: string; helper: string }) {
   return (
     <div className="mb-2 flex items-baseline justify-between">
-      <h2 className="text-sm font-semibold uppercase tracking-wider">
+      <h2 className="text-sm font-semibold tracking-wider uppercase">
         {title}
       </h2>
       <span className="text-muted-foreground text-xs">{helper}</span>
@@ -272,10 +284,12 @@ function TeamLine({
   const present = names.filter((n): n is string => !!n);
   return (
     <div>
-      <p className="text-muted-foreground text-xs uppercase tracking-wider">
+      <p className="text-muted-foreground text-xs tracking-wider uppercase">
         {label}
       </p>
-      <p className="font-medium">{present.join(" + ")}</p>
+      <p className="border-border/70 mt-1 rounded-lg border px-3 py-2 text-sm leading-5 font-medium">
+        {present.join(" + ")}
+      </p>
     </div>
   );
 }
