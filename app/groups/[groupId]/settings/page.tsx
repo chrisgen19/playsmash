@@ -1,5 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 
+import { DangerZone } from "@/components/groups/danger-zone";
+import { EditGroupForm } from "@/components/groups/edit-group-form";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -8,7 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { prisma, GroupRole } from "@/lib/db";
+import { prisma, GroupMemberStatus, GroupRole } from "@/lib/db";
 import {
   ForbiddenError,
   NotFoundError,
@@ -26,13 +28,16 @@ export default async function GroupSettingsPage({
 }) {
   const { groupId } = await params;
 
+  let role: GroupRole;
   try {
-    await requireGroupRole(groupId, OWNERS_AND_ADMINS);
+    const auth = await requireGroupRole(groupId, OWNERS_AND_ADMINS);
+    role = auth.role;
   } catch (err) {
     if (err instanceof NotFoundError) notFound();
     if (err instanceof ForbiddenError) redirect(`/groups/${groupId}`);
     throw err;
   }
+  const isOwner = role === GroupRole.OWNER;
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -46,17 +51,56 @@ export default async function GroupSettingsPage({
   });
   if (!group) notFound();
 
+  // Candidates for ownership transfer — every other ACTIVE member.
+  const transferCandidates = isOwner
+    ? await prisma.groupMember.findMany({
+        where: {
+          groupId,
+          status: GroupMemberStatus.ACTIVE,
+          role: { not: GroupRole.OWNER },
+        },
+        orderBy: { joinedAt: "asc" },
+        select: {
+          id: true,
+          user: {
+            select: {
+              name: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      })
+    : [];
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
       <h1 className="mb-6 text-2xl font-semibold tracking-tight">Settings</h1>
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">Group details</CardTitle>
+          <CardDescription>
+            Name, description, and who can find or join the group.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EditGroupForm
+            groupId={group.id}
+            name={group.name}
+            description={group.description}
+            visibility={group.visibility}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
           <CardTitle className="text-base">Join code</CardTitle>
           <CardDescription>
             Share this code with players to let them join. Regenerating
-            disables the current code immediately — anyone holding the old
-            one will need the new one.
+            disables the current code immediately.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center justify-between gap-3">
@@ -74,26 +118,31 @@ export default async function GroupSettingsPage({
 
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle className="text-base">Group info</CardTitle>
+          <CardTitle className="text-base">Danger zone</CardTitle>
+          <CardDescription>
+            {isOwner
+              ? "Owner-only actions. Both ask for confirmation."
+              : "Only the group owner can transfer ownership or archive the group."}
+          </CardDescription>
         </CardHeader>
-        <CardContent className="text-muted-foreground space-y-1 text-sm">
-          <p>
-            <span className="text-foreground">Name:</span> {group.name}
-          </p>
-          <p>
-            <span className="text-foreground">Visibility:</span>{" "}
-            {group.visibility}
-          </p>
-          {group.description && (
-            <p>
-              <span className="text-foreground">Description:</span>{" "}
-              {group.description}
+        <CardContent>
+          {isOwner ? (
+            <DangerZone
+              groupId={group.id}
+              candidates={transferCandidates.map((m) => ({
+                memberId: m.id,
+                label:
+                  m.user.name ??
+                  ([m.user.firstName, m.user.lastName]
+                    .filter(Boolean)
+                    .join(" ") || m.user.email),
+              }))}
+            />
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              You&apos;re an admin — ask the owner for these changes.
             </p>
           )}
-          <p className="pt-2 italic">
-            Editing name/visibility, ownership transfer, and group deletion
-            arrive in Phase 8.
-          </p>
         </CardContent>
       </Card>
     </main>

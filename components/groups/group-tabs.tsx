@@ -25,8 +25,12 @@ export function GroupTabs({
     { href: `${base}/members`, label: "Members" },
     { href: `${base}/players`, label: "Players" },
     { href: `${base}/stats`, label: "Stats" },
+    // Activity + Settings are admin-only — gated server-side too.
     ...(showSettings
-      ? [{ href: `${base}/settings`, label: "Settings" }]
+      ? [
+          { href: `${base}/activity`, label: "Activity" },
+          { href: `${base}/settings`, label: "Settings" },
+        ]
       : []),
   ];
 

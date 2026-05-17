@@ -18,6 +18,7 @@ const { prismaMock, txMocks } = vi.hoisted(() => {
   const txMocks = {
     $queryRaw: vi.fn(),
     invite: { update: vi.fn() },
+    group: { findUnique: vi.fn() },
     groupMember: { findUnique: vi.fn(), update: vi.fn(), create: vi.fn() },
     playerProfile: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
     activityLog: { create: vi.fn() },
@@ -60,6 +61,8 @@ describe("joinGroupByCode", () => {
     vi.clearAllMocks();
     // The locking SELECT ... FOR UPDATE returns the invite row.
     txMocks.$queryRaw.mockResolvedValue([baseInvite]);
+    // The group's archived-status re-check defaults to an active group.
+    txMocks.group.findUnique.mockResolvedValue({ status: "ACTIVE" });
     txMocks.groupMember.findUnique.mockResolvedValue(null);
     txMocks.playerProfile.findUnique.mockResolvedValue(null);
   });
@@ -158,6 +161,19 @@ describe("joinGroupByCode", () => {
         code: "ABC123",
       }),
     ).rejects.toBeInstanceOf(JoinGroupError);
+    expect(txMocks.invite.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects joining an archived group even with a live invite", async () => {
+    txMocks.group.findUnique.mockResolvedValue({ status: "ARCHIVED" });
+    await expect(
+      joinGroupByCode({
+        userId: "u_1",
+        userName: "A",
+        userEmail: "a@x.com",
+        code: "ABC123",
+      }),
+    ).rejects.toMatchObject({ code: "GROUP_ARCHIVED" });
     expect(txMocks.invite.update).not.toHaveBeenCalled();
   });
 
