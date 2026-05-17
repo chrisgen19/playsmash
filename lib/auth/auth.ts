@@ -1,5 +1,8 @@
+import { PrismaAdapter } from "@auth/prisma-adapter";
+import type { PrismaClient as AdapterPrismaClient } from "@prisma/client/extension";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 
 import { prisma } from "@/lib/db/prisma";
 import { loginSchema } from "@/lib/validations/auth";
@@ -7,10 +10,27 @@ import { loginSchema } from "@/lib/validations/auth";
 import { authConfig } from "./auth.config";
 import { verifyPassword } from "./password";
 
+const googleProvider =
+  process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
+    ? [
+        Google({
+          clientId: process.env.AUTH_GOOGLE_ID,
+          clientSecret: process.env.AUTH_GOOGLE_SECRET,
+          allowDangerousEmailAccountLinking: true,
+        }),
+      ]
+    : [];
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  // PrismaAdapter persists OAuth User+Account+VerificationToken rows.
+  // Credentials sign-ins don't touch the adapter — they get their User row
+  // from the explicit `registerAction`, so they coexist safely.
+  // The cast bridges Prisma 7's project-local generated client to the
+  // legacy client shape the adapter is typed against.
+  adapter: PrismaAdapter(prisma as unknown as AdapterPrismaClient),
   providers: [
-    ...authConfig.providers,
+    ...googleProvider,
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },

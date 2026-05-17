@@ -1,26 +1,20 @@
 import type { NextAuthConfig } from "next-auth";
-import Google from "next-auth/providers/google";
 
 /**
- * Edge-safe Auth.js config. Anything that touches Prisma or Node-only APIs
- * (bcrypt, the pg driver) lives in `auth.ts`, not here. Imported by `proxy.ts`.
+ * Edge-safe Auth.js config — used by `proxy.ts` (Next 16 middleware).
+ *
+ * Providers and the Prisma adapter live in `auth.ts` because they touch
+ * Node-only APIs (bcrypt, the pg driver, the OAuth User upsert path).
+ * Keeping this file provider-free guarantees the edge bundle never imports
+ * Prisma and that OAuth users get persisted via the adapter when they
+ * sign in through the full server-side handler.
  */
 export const authConfig = {
   pages: {
     signIn: "/login",
   },
   session: { strategy: "jwt" },
-  providers: [
-    // Credentials provider is registered in auth.ts (it needs Prisma + bcrypt).
-    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
-      ? [
-          Google({
-            clientId: process.env.AUTH_GOOGLE_ID,
-            clientSecret: process.env.AUTH_GOOGLE_SECRET,
-          }),
-        ]
-      : []),
-  ],
+  providers: [],
   callbacks: {
     authorized({ auth, request }) {
       const isLoggedIn = !!auth?.user;

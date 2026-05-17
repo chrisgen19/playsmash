@@ -3,6 +3,7 @@
 import { AuthError } from "next-auth";
 
 import { signIn } from "@/lib/auth/auth";
+import { safeCallbackUrl } from "@/lib/auth/safe-callback-url";
 
 export type LoginState = {
   error?: string;
@@ -12,8 +13,9 @@ export async function loginAction(
   _prevState: LoginState,
   formData: FormData,
 ): Promise<LoginState> {
-  const callbackUrl =
-    (formData.get("callbackUrl") as string | null) || "/dashboard";
+  const callbackUrl = safeCallbackUrl(
+    formData.get("callbackUrl") as string | null,
+  );
   try {
     await signIn("credentials", {
       email: formData.get("email"),
@@ -33,7 +35,8 @@ export async function loginAction(
 }
 
 export async function signInWithGoogleAction(formData: FormData) {
-  const callbackUrl =
-    (formData.get("callbackUrl") as string | null) || "/dashboard";
+  const callbackUrl = safeCallbackUrl(
+    formData.get("callbackUrl") as string | null,
+  );
   await signIn("google", { redirectTo: callbackUrl });
 }
