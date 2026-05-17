@@ -21,11 +21,17 @@ export function RegisterForm() {
 
   return (
     <form action={formAction} className="space-y-5">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Create your account</h1>
+      <header className="space-y-2">
+        <p className="eyebrow text-muted-foreground inline-flex items-center gap-2">
+          <span aria-hidden className="inline-block size-1.5 bg-accent" />
+          Get started
+        </p>
+        <h1 className="font-display text-3xl tracking-tight">
+          Create your account
+        </h1>
         <p className="text-muted-foreground text-sm">
           Already have one?{" "}
-          <Link href="/login" className="text-foreground underline">
+          <Link href="/login" className="text-foreground underline underline-offset-4">
             Sign in
           </Link>
           .
@@ -103,7 +109,7 @@ export function RegisterForm() {
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" variant="accent" size="lg" disabled={pending} className="w-full">
         {pending ? "Creating account…" : "Create account"}
       </Button>
     </form>

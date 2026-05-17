@@ -29,11 +29,15 @@ export function LoginForm({
 
   return (
     <div className="space-y-5">
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold">Sign in</h1>
+      <header className="space-y-2">
+        <p className="eyebrow text-muted-foreground inline-flex items-center gap-2">
+          <span aria-hidden className="inline-block size-1.5 bg-accent" />
+          Welcome back
+        </p>
+        <h1 className="font-display text-3xl tracking-tight">Sign in</h1>
         <p className="text-muted-foreground text-sm">
           New here?{" "}
-          <Link href="/register" className="text-foreground underline">
+          <Link href="/register" className="text-foreground underline underline-offset-4">
             Create an account
           </Link>
           .
@@ -73,7 +77,7 @@ export function LoginForm({
           </p>
         )}
 
-        <Button type="submit" disabled={pending} className="w-full">
+        <Button type="submit" variant="accent" size="lg" disabled={pending} className="w-full">
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
@@ -89,7 +93,7 @@ export function LoginForm({
             {callbackUrl && (
               <input type="hidden" name="callbackUrl" value={callbackUrl} />
             )}
-            <Button type="submit" variant="outline" className="w-full">
+            <Button type="submit" variant="outline" size="lg" className="w-full">
               Continue with Google
             </Button>
           </form>
