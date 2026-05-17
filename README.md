@@ -256,6 +256,7 @@ Unit tests (Vitest) cover the critical pure logic and services:
 - **Sessions** — atomic create + courts + check-in order, eligibility filter (`ACTIVE`/`TEMPORARY`), `FOR UPDATE` locked status checks, no-players + non-PLANNED guards.
 - **Stacking** (Phase 4) — 4/1, 8/2, 9/2-with-rest invariants; repeated-partner & replay penalties; fair rotation (`max − min ≤ 1` over 9 rounds with 9 players / 2 courts); no duplicate player per round; determinism with fixed seed.
 - **Scoring** (Phase 5) — pure `validateScore` rule matrix (non-integer / negative / tied / below-points-to-win / win-by-two); service tests for start/complete/cancel/edit with locked status re-check.
+- **Stats** (Phase 6) — `computePlayerStats` (no division-by-zero); leaderboard ranking with winPct + gamesPlayed + differential tiebreak + stable id ordering; partner history counts + wins-together; zero-game players in the roster.
 - **Activity log** — writer payload + transaction passthrough.
 - **OAuth** — `email_verified` gate; **callback URLs** — open-redirect prevention.
 
@@ -324,11 +325,14 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 - [x] Admin score editing with activity log (idempotent, validated)
 - [x] Scoring validation + service tests, including concurrency abort
 
-### ⬜ Phase 6 — Player stats & history
+### ✅ Phase 6 — Player stats & history
 
-- [ ] Player match history
-- [ ] Group leaderboard / basic stats (games, wins, losses, win %, point differential, partners)
-- [ ] Temporary players included in stats
+- [x] Pure stats algorithm (`lib/stats/`) — `computePlayerStats`, `computeGroupLeaderboard`, `computePartnerHistory`
+- [x] Per-player match history page at `/groups/[groupId]/players/[playerId]` (header stats, partner table, last 20 matches with W/L)
+- [x] Group leaderboard at `/groups/[groupId]/stats` (rank, GP, W–L, Win %, PF, PA, ±)
+- [x] Session leaderboard surfaced on the session dashboard
+- [x] Temporary players included in stats (no `userId` required)
+- [x] Zero-game players sort to the bottom with `winPct = 0`
 
 ### ⬜ Phase 7 — Realtime / live session UX
 

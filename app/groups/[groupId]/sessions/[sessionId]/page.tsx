@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { EditAttendanceForm } from "@/components/sessions/edit-attendance-form";
 import { StartSessionButton } from "@/components/sessions/start-session-button";
 import { LocalDateTime } from "@/components/shared/local-datetime";
+import { LeaderboardTable } from "@/components/stats/leaderboard-table";
+import { getSessionLeaderboard } from "@/lib/stats/queries";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -88,6 +90,11 @@ export default async function SessionDetailPage({
           select: { id: true, displayName: true },
         })
       : [];
+
+  // Session-scoped leaderboard. Cheap to compute even with many matches —
+  // single pass over completed rows. Authorization piggybacks on the layout's
+  // requireGroupRole above.
+  const leaderboard = await getSessionLeaderboard(sessionId, groupId);
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
@@ -223,6 +230,23 @@ export default async function SessionDetailPage({
               </span>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle className="text-base">Session leaderboard</CardTitle>
+          <CardDescription>
+            Live stats from this session&apos;s completed matches.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LeaderboardTable
+            rows={leaderboard.rows}
+            players={leaderboard.players}
+            groupId={groupId}
+            emptyText="No completed matches yet — enter scores to populate."
+          />
         </CardContent>
       </Card>
 
