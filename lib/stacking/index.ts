@@ -6,6 +6,7 @@ export {
 export {
   buildPairingHistory,
   getSessionPlayerStats,
+  matchupKey,
   pairKey,
 } from "./stats";
 export {

@@ -50,7 +50,10 @@ export async function generateNextRound(params: {
 }): Promise<GenerateRoundResult> {
   const { groupId, actorUserId, sessionId } = params;
 
-  const session = await prisma.playSession.findUnique({
+  // Pre-tx fast-fail for the obvious cases (not in group, not ACTIVE). These
+  // are re-checked under a row lock inside the transaction; this read just
+  // saves a round-trip when the caller is clearly wrong.
+  const sessionMeta = await prisma.playSession.findUnique({
     where: { id: sessionId },
     select: {
       id: true,
@@ -63,107 +66,124 @@ export async function generateNextRound(params: {
       },
     },
   });
-  if (!session || session.groupId !== groupId) {
+  if (!sessionMeta || sessionMeta.groupId !== groupId) {
     throw new NotFoundError("Session not found in this group");
   }
-  if (session.status !== PlaySessionStatus.ACTIVE) {
+  if (sessionMeta.status !== PlaySessionStatus.ACTIVE) {
     throw new GenerateRoundError(
       "SESSION_NOT_ACTIVE",
       "Only an active session can generate a round",
     );
   }
 
-  const openMatchCount = await prisma.match.count({
-    where: {
-      sessionId,
-      status: { in: [MatchStatus.QUEUED, MatchStatus.ACTIVE] },
-    },
-  });
-  if (openMatchCount > 0) {
-    throw new GenerateRoundError(
-      "ROUND_IN_PROGRESS",
-      "Finish or cancel the current round before generating a new one",
-    );
-  }
+  // Everything from here on runs inside one transaction with the PlaySession
+  // row locked. Concurrent generateNextRound calls serialize on this lock:
+  // the second call sees the matches the first one wrote and aborts with
+  // ROUND_IN_PROGRESS instead of producing a duplicate round.
+  return prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<Array<{ status: string }>>`
+      SELECT "status" FROM "PlaySession" WHERE "id" = ${sessionId} FOR UPDATE
+    `;
+    if (lockedRows.length === 0) {
+      throw new NotFoundError("Session not found in this group");
+    }
+    if (lockedRows[0].status !== PlaySessionStatus.ACTIVE) {
+      throw new GenerateRoundError(
+        "SESSION_NOT_ACTIVE",
+        "Only an active session can generate a round",
+      );
+    }
 
-  // Players available to play this round. LEFT players are skipped.
-  const sessionPlayers = await prisma.sessionPlayer.findMany({
-    where: {
-      sessionId,
-      status: {
-        in: [
-          SessionPlayerStatus.AVAILABLE,
-          SessionPlayerStatus.WAITING,
-          SessionPlayerStatus.RESTING,
-        ],
+    // Authoritative open-match check, under the lock.
+    const openMatchCount = await tx.match.count({
+      where: {
+        sessionId,
+        status: { in: [MatchStatus.QUEUED, MatchStatus.ACTIVE] },
       },
-    },
-    select: { id: true, playerProfileId: true, checkInOrder: true },
-  });
-  if (sessionPlayers.length < 4) {
-    throw new GenerateRoundError(
-      "NOT_ENOUGH_PLAYERS",
-      "Need at least 4 available players to generate a round",
-    );
-  }
+    });
+    if (openMatchCount > 0) {
+      throw new GenerateRoundError(
+        "ROUND_IN_PROGRESS",
+        "Finish or cancel the current round before generating a new one",
+      );
+    }
 
-  // Completed history feeds the algorithm. Cancelled rounds are ignored —
-  // they didn't happen for fairness purposes.
-  const completed = await prisma.match.findMany({
-    where: { sessionId, status: MatchStatus.COMPLETED },
-    select: {
-      roundNumber: true,
-      team1Player1Id: true,
-      team1Player2Id: true,
-      team2Player1Id: true,
-      team2Player2Id: true,
-    },
-  });
+    // Players available to play this round. LEFT players are skipped.
+    const sessionPlayers = await tx.sessionPlayer.findMany({
+      where: {
+        sessionId,
+        status: {
+          in: [
+            SessionPlayerStatus.AVAILABLE,
+            SessionPlayerStatus.WAITING,
+            SessionPlayerStatus.RESTING,
+          ],
+        },
+      },
+      select: { id: true, playerProfileId: true, checkInOrder: true },
+    });
+    if (sessionPlayers.length < 4) {
+      throw new GenerateRoundError(
+        "NOT_ENOUGH_PLAYERS",
+        "Need at least 4 available players to generate a round",
+      );
+    }
 
-  const algoPlayers: StackingPlayer[] = sessionPlayers.map((sp) => ({
-    id: sp.playerProfileId,
-    checkInOrder: sp.checkInOrder,
-  }));
+    // Completed history feeds the algorithm. Cancelled rounds are ignored —
+    // they didn't happen for fairness purposes.
+    const completed = await tx.match.findMany({
+      where: { sessionId, status: MatchStatus.COMPLETED },
+      select: {
+        roundNumber: true,
+        team1Player1Id: true,
+        team1Player2Id: true,
+        team2Player1Id: true,
+        team2Player2Id: true,
+      },
+    });
 
-  const algoHistory: StackingMatch[] = completed
-    // Doubles-only for the MVP algorithm; skip singles rows defensively.
-    .filter(
-      (
-        m,
-      ): m is typeof m & {
-        team1Player2Id: string;
-        team2Player2Id: string;
-      } => m.team1Player2Id !== null && m.team2Player2Id !== null,
-    )
-    .map((m) => ({
-      roundNumber: m.roundNumber,
-      team1: [m.team1Player1Id, m.team1Player2Id],
-      team2: [m.team2Player1Id, m.team2Player2Id],
+    const algoPlayers: StackingPlayer[] = sessionPlayers.map((sp) => ({
+      id: sp.playerProfileId,
+      checkInOrder: sp.checkInOrder,
     }));
 
-  // Seed mixes session id + current round so re-runs of the same round
-  // (after a cancelled round, say) are stable, while different rounds
-  // explore different shuffles.
-  const seed =
-    hashSeed(session.id) ^
-    ((completed.reduce((max, m) => Math.max(max, m.roundNumber), 0) + 1) <<
-      16);
+    const algoHistory: StackingMatch[] = completed
+      // Doubles-only for the MVP algorithm; skip singles rows defensively.
+      .filter(
+        (
+          m,
+        ): m is typeof m & {
+          team1Player2Id: string;
+          team2Player2Id: string;
+        } => m.team1Player2Id !== null && m.team2Player2Id !== null,
+      )
+      .map((m) => ({
+        roundNumber: m.roundNumber,
+        team1: [m.team1Player1Id, m.team1Player2Id],
+        team2: [m.team2Player1Id, m.team2Player2Id],
+      }));
 
-  const result = generateRoundMatches({
-    players: algoPlayers,
-    history: algoHistory,
-    numberOfCourts: session.numberOfCourts,
-    seed,
-  });
+    // Seed mixes session id + current round so re-runs of the same round
+    // (after a cancelled round, say) are stable, while different rounds
+    // explore different shuffles.
+    const seed =
+      hashSeed(sessionMeta.id) ^
+      ((completed.reduce((max, m) => Math.max(max, m.roundNumber), 0) + 1) <<
+        16);
 
-  // Map session-player id by player-profile id so we can flip statuses.
-  const spByProfile = new Map(
-    sessionPlayers.map((sp) => [sp.playerProfileId, sp.id]),
-  );
+    const result = generateRoundMatches({
+      players: algoPlayers,
+      history: algoHistory,
+      numberOfCourts: sessionMeta.numberOfCourts,
+      seed,
+    });
 
-  await prisma.$transaction(async (tx) => {
+    const spByProfile = new Map(
+      sessionPlayers.map((sp) => [sp.playerProfileId, sp.id]),
+    );
+
     for (const match of result.matches) {
-      const court = session.courts[match.courtIndex];
+      const court = sessionMeta.courts[match.courtIndex];
       await tx.match.create({
         data: {
           sessionId,
@@ -224,13 +244,13 @@ export async function generateNextRound(params: {
       },
       tx,
     );
-  });
 
-  return {
-    roundNumber: result.roundNumber,
-    matchesCreated: result.matches.length,
-    restingCount: result.restingPlayerIds.length,
-  };
+    return {
+      roundNumber: result.roundNumber,
+      matchesCreated: result.matches.length,
+      restingCount: result.restingPlayerIds.length,
+    };
+  });
 }
 
 /** djb2-style hash of a string into a 32-bit int. Stable across runtimes. */

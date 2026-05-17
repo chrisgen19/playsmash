@@ -47,7 +47,20 @@ export type PairingHistory = {
   opponents: Map<string, number>;
   /** Map of pair-key -> most recent round they were partners. */
   lastPartnerRound: Map<string, number>;
+  /**
+   * Distinct (team-a-key, team-b-key) matchups that have happened, with the
+   * most recent round they happened in. Keyed by `matchupKey(p1, p2)` so the
+   * order of the two pairs doesn't matter. This is what makes the replay
+   * penalty correct — two pairs each playing in the same prior round on
+   * *different* courts is NOT a replay; only a shared match is.
+   */
+  lastMatchupRound: Map<string, number>;
 };
+
+/** Order-independent matchup key built from two already-canonical pair keys. */
+export function matchupKey(pairA: string, pairB: string): string {
+  return pairA < pairB ? `${pairA}#${pairB}` : `${pairB}#${pairA}`;
+}
 
 export function pairKey(a: string, b: string): string {
   return a < b ? `${a}|${b}` : `${b}|${a}`;
@@ -68,6 +81,7 @@ export function buildPairingHistory(
   const partners = new Map<string, number>();
   const opponents = new Map<string, number>();
   const lastPartnerRound = new Map<string, number>();
+  const lastMatchupRound = new Map<string, number>();
 
   for (const m of history) {
     const pk1 = pairKey(m.team1[0], m.team1[1]);
@@ -82,9 +96,14 @@ export function buildPairingHistory(
       pk2,
       Math.max(lastPartnerRound.get(pk2) ?? 0, m.roundNumber),
     );
+    const mk = matchupKey(pk1, pk2);
+    lastMatchupRound.set(
+      mk,
+      Math.max(lastMatchupRound.get(mk) ?? 0, m.roundNumber),
+    );
     for (const a of m.team1) {
       for (const b of m.team2) inc(opponents, pairKey(a, b));
     }
   }
-  return { partners, opponents, lastPartnerRound };
+  return { partners, opponents, lastPartnerRound, lastMatchupRound };
 }

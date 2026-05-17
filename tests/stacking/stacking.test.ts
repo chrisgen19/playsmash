@@ -136,6 +136,35 @@ describe("scoreCandidateMatch — penalty signal", () => {
     );
     expect(replay).toBeGreaterThan(onlyOneRepeatedPair);
   });
+
+  it("does NOT replay-penalise pairs that played in the same round on different courts", () => {
+    // Round 1 had two matches on two courts:
+    //   Court A: (p1,p2) vs (p3,p4)
+    //   Court B: (p5,p6) vs (p7,p8)
+    // For round 2, putting (p1,p2) vs (p5,p6) keeps both partner pairs from
+    // round 1 — but they never faced each other, so it must NOT be flagged
+    // as a recent replay (the old, broken code did flag it).
+    const history = buildPairingHistory([
+      { roundNumber: 1, team1: ["p1", "p2"], team2: ["p3", "p4"] },
+      { roundNumber: 1, team1: ["p5", "p6"], team2: ["p7", "p8"] },
+    ]);
+    const crossMatch = scoreCandidateMatch(
+      { team1: ["p1", "p2"], team2: ["p5", "p6"] },
+      history,
+      2,
+    );
+    const trueReplay = scoreCandidateMatch(
+      { team1: ["p1", "p2"], team2: ["p3", "p4"] },
+      history,
+      2,
+    );
+    // The true replay must be strictly worse than the cross-match arrangement.
+    expect(trueReplay).toBeGreaterThan(crossMatch);
+    // And the cross-match arrangement carries no replay penalty bump —
+    // its penalty is exactly two repeated partners, nothing else.
+    // (2 partners * 100 = 200, no opponents repeated since p1/p2 never faced p5/p6.)
+    expect(crossMatch).toBe(200);
+  });
 });
 
 describe("fairness over multiple rounds", () => {

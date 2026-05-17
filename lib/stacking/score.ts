@@ -1,4 +1,4 @@
-import { pairKey, type PairingHistory } from "./stats";
+import { matchupKey, pairKey, type PairingHistory } from "./stats";
 
 /**
  * Penalty weights — higher numbers are worse. Tuned by intent, not measurement:
@@ -39,14 +39,12 @@ export function scoreCandidateMatch(
   score += (history.partners.get(partnerKey1) ?? 0) * REPEATED_PARTNER;
   score += (history.partners.get(partnerKey2) ?? 0) * REPEATED_PARTNER;
 
-  const sameTeam1 = history.lastPartnerRound.get(partnerKey1);
-  const sameTeam2 = history.lastPartnerRound.get(partnerKey2);
-  if (
-    sameTeam1 !== undefined &&
-    sameTeam2 !== undefined &&
-    sameTeam1 >= currentRound - 1 &&
-    sameTeam2 >= currentRound - 1
-  ) {
+  // True replay: both pairs faced each other *in the same prior match*, not
+  // just on different courts in the same round. Track via lastMatchupRound.
+  const lastMatchup = history.lastMatchupRound.get(
+    matchupKey(partnerKey1, partnerKey2),
+  );
+  if (lastMatchup !== undefined && lastMatchup >= currentRound - 1) {
     score += RECENT_SAME_MATCH;
   }
 
