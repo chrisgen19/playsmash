@@ -32,18 +32,38 @@ export function RegisterForm() {
         </p>
       </header>
 
-      <div className="space-y-2">
-        <Label htmlFor="name">Name</Label>
-        <Input
-          id="name"
-          name="name"
-          autoComplete="name"
-          required
-          minLength={2}
-        />
-        {state.fieldErrors?.name && (
-          <p className="text-destructive text-sm">{state.fieldErrors.name}</p>
-        )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="firstName">First name</Label>
+          <Input
+            id="firstName"
+            name="firstName"
+            autoComplete="given-name"
+            required
+            maxLength={40}
+          />
+          {state.fieldErrors?.firstName && (
+            <p className="text-destructive text-sm">
+              {state.fieldErrors.firstName}
+            </p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="lastName">Last name</Label>
+          <Input
+            id="lastName"
+            name="lastName"
+            autoComplete="family-name"
+            required
+            maxLength={40}
+          />
+          {state.fieldErrors?.lastName && (
+            <p className="text-destructive text-sm">
+              {state.fieldErrors.lastName}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="space-y-2">

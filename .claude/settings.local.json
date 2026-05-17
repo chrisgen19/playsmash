@@ -23,7 +23,13 @@
       "Bash(pnpm build *)",
       "Bash(git checkout *)",
       "Bash(git remote *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(git push *)",
+      "Bash(git -c user.name=Christian -c user.email=cgend.dev@gmail.com commit -m ' *)",
+      "Bash(gh pr create --base main --head feature/phase-1-auth-and-groups --title 'feat\\(phase-1\\): auth, base schema, and create-group flow' --body ' *)",
+      "Bash(git -c user.name=Christian -c user.email=cgend.dev@gmail.com commit -m 'feat\\(auth\\): split registration into first/last name *)"
     ]
   }
 }

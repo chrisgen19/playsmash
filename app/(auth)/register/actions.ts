@@ -8,7 +8,9 @@ import { prisma } from "@/lib/db";
 import { registerSchema } from "@/lib/validations/auth";
 
 export type RegisterState = {
-  fieldErrors?: Partial<Record<"name" | "email" | "password", string>>;
+  fieldErrors?: Partial<
+    Record<"firstName" | "lastName" | "email" | "password", string>
+  >;
   error?: string;
 };
 
@@ -17,7 +19,8 @@ export async function registerAction(
   formData: FormData,
 ): Promise<RegisterState> {
   const parsed = registerSchema.safeParse({
-    name: formData.get("name"),
+    firstName: formData.get("firstName"),
+    lastName: formData.get("lastName"),
     email: formData.get("email"),
     password: formData.get("password"),
   });
@@ -26,7 +29,8 @@ export async function registerAction(
     const flat = parsed.error.flatten().fieldErrors;
     return {
       fieldErrors: {
-        name: flat.name?.[0],
+        firstName: flat.firstName?.[0],
+        lastName: flat.lastName?.[0],
         email: flat.email?.[0],
         password: flat.password?.[0],
       },
@@ -46,7 +50,10 @@ export async function registerAction(
   const passwordHash = await hashPassword(parsed.data.password);
   await prisma.user.create({
     data: {
-      name: parsed.data.name,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      // Keep `name` in sync — Auth.js + session.user.name read from here.
+      name: `${parsed.data.firstName} ${parsed.data.lastName}`,
       email: parsed.data.email,
       passwordHash,
     },
