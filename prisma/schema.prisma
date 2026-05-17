@@ -36,6 +36,7 @@ model User {
   invitesCreated     Invite[]        @relation("InviteCreatedBy")
   joinRequests       JoinRequest[]
   activityLogs       ActivityLog[]
+  sessionsCreated    PlaySession[]   @relation("PlaySessionCreatedBy")
 
   @@index([email])
 }
@@ -140,6 +141,8 @@ model Group {
   invites      Invite[]
   joinRequests JoinRequest[]
   activityLogs ActivityLog[]
+  sessions     PlaySession[]
+  courts       Court[]
 
   @@index([createdByUserId])
 }
@@ -176,9 +179,10 @@ model PlayerProfile {
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
-  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user      User? @relation("PlayerProfileUser", fields: [userId], references: [id], onDelete: SetNull)
-  createdBy User? @relation("PlayerProfileCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  group          Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user           User?           @relation("PlayerProfileUser", fields: [userId], references: [id], onDelete: SetNull)
+  createdBy      User?           @relation("PlayerProfileCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  sessionPlayers SessionPlayer[]
 
   @@unique([groupId, userId])
   @@index([groupId])
@@ -238,4 +242,95 @@ model ActivityLog {
 
   @@index([groupId, createdAt])
   @@index([targetType, targetId])
+}
+
+// -----------------------------------------------------------------------------
+// Phase 3 — play sessions, courts, attendance
+//
+// NOTE: Auth.js owns the `Session` table. The play-session model is named
+// `PlaySession` to avoid the clash.
+// -----------------------------------------------------------------------------
+
+enum ScoringType {
+  RALLY
+  SIDE_OUT
+  CUSTOM
+}
+
+enum PlaySessionStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum CourtStatus {
+  AVAILABLE
+  IN_USE
+  DISABLED
+}
+
+enum SessionPlayerStatus {
+  AVAILABLE
+  WAITING
+  PLAYING
+  RESTING
+  LEFT
+}
+
+model PlaySession {
+  id              String            @id @default(cuid())
+  groupId         String
+  name            String
+  date            DateTime
+  location        String?
+  numberOfCourts  Int               @default(1)
+  scoringType     ScoringType       @default(RALLY)
+  pointsToWin     Int               @default(11)
+  winByTwo        Boolean           @default(true)
+  status          PlaySessionStatus @default(PLANNED)
+  createdByUserId String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  group     Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdBy User            @relation("PlaySessionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  courts    Court[]
+  players   SessionPlayer[]
+
+  @@index([groupId, date])
+  @@index([status])
+}
+
+model Court {
+  id          String      @id @default(cuid())
+  groupId     String
+  sessionId   String?
+  name        String
+  courtNumber Int
+  status      CourtStatus @default(AVAILABLE)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  group   Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  session PlaySession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+  @@index([sessionId])
+}
+
+model SessionPlayer {
+  id              String              @id @default(cuid())
+  sessionId       String
+  playerProfileId String
+  status          SessionPlayerStatus @default(AVAILABLE)
+  checkInOrder    Int
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  session PlaySession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  player  PlayerProfile @relation(fields: [playerProfileId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, playerProfileId])
+  @@index([sessionId, status])
 }

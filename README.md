@@ -196,8 +196,11 @@ Implemented so far (Phases 1–2):
 | `Invite` | A join code with optional expiry / max uses. |
 | `JoinRequest` | Pending request to join (workflow lands in Phase 8). |
 | `ActivityLog` | Audit trail of group changes (UI in Phase 8). |
+| `PlaySession` | A scheduled play day — courts, scoring rules, status. Named `PlaySession` because Auth.js owns `Session`. |
+| `Court` | A court within a session. |
+| `SessionPlayer` | A player checked in to a session. Unique on `(sessionId, playerProfileId)`. |
 
-Planned (Phase 3+): `Session` (play session), `Court`, `SessionPlayer`, `Match`, `ScoreEvent`.
+Planned (Phase 4+): `Match`, `ScoreEvent`.
 
 ---
 
@@ -287,14 +290,16 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 - [x] Activity logs for player/member changes
 - [x] Tests for join, members, players, activity services
 
-### ⬜ Phase 3 — Sessions, attendance & courts
+### ✅ Phase 3 — Sessions, attendance & courts
 
-- [ ] `Session`, `SessionPlayer`, `Court` models
-- [ ] Create a session (date, location, scoring type, points to win, win-by-two, court count)
-- [ ] Select available `PlayerProfile`s for a session
-- [ ] Session dashboard with player attendance states
-- [ ] Court list per session
-- [ ] Validation, authorization, activity logs
+- [x] `PlaySession`, `SessionPlayer`, `Court` models + enums (named `PlaySession` to avoid the Auth.js `Session` clash)
+- [x] Create a session (date, location, scoring type, points to win, win-by-two, court count)
+- [x] Select available `PlayerProfile`s for a session (temporary players included)
+- [x] Session list + dashboard with player attendance states
+- [x] Court list auto-created per session
+- [x] Edit attendance / start session (PLANNED → ACTIVE)
+- [x] Validation, server-side authorization, activity logs
+- [x] Tests for session services
 
 ### ⬜ Phase 4 — Stacking & shuffle generation
 

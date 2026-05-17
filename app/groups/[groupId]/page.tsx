@@ -120,19 +120,19 @@ export default async function GroupPage({
         </Link>
       </div>
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-base">Sessions</CardTitle>
-          <CardDescription>
-            Schedule a play day, assign courts, generate stacking, and track
-            scores.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-muted-foreground text-sm">
-          Sessions and court rotation arrive in Phase 3 / Phase 4. The current
-          build covers auth, groups, members, players, and invites.
-        </CardContent>
-      </Card>
+      <Link href={`/groups/${group.id}/sessions`}>
+        <Card className="hover:border-foreground/20 mt-6 transition-colors">
+          <CardHeader>
+            <CardTitle className="text-base">Sessions →</CardTitle>
+            <CardDescription>
+              Schedule a play day, set courts, and check players in.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-muted-foreground text-sm">
+            Court rotation and scoring arrive in Phases 4–5.
+          </CardContent>
+        </Card>
+      </Link>
     </main>
   );
 }

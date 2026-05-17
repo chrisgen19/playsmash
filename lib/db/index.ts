@@ -9,6 +9,10 @@ export {
   PlayerStatus,
   InviteStatus,
   JoinRequestStatus,
+  ScoringType,
+  PlaySessionStatus,
+  CourtStatus,
+  SessionPlayerStatus,
 } from "./generated/enums";
 export { Prisma } from "./generated/client";
 export type {
@@ -19,4 +23,7 @@ export type {
   Invite,
   JoinRequest,
   ActivityLog,
+  PlaySession,
+  Court,
+  SessionPlayer,
 } from "./generated/client";
