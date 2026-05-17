@@ -25,6 +25,7 @@ export const ActivityAction = {
   SESSION_CREATED: "session.created",
   SESSION_STARTED: "session.started",
   SESSION_PLAYERS_UPDATED: "session.players_updated",
+  SESSION_ROUND_GENERATED: "session.round_generated",
 } as const;
 
 export type ActivityActionValue =
@@ -35,7 +36,8 @@ export type ActivityTargetType =
   | "GroupMember"
   | "PlayerProfile"
   | "Invite"
-  | "PlaySession";
+  | "PlaySession"
+  | "Match";
 
 export type LogActivityInput = {
   groupId: string;
