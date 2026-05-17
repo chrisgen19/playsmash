@@ -4,6 +4,7 @@
 export { prisma } from "./prisma";
 export {
   GroupVisibility,
+  GroupStatus,
   GroupRole,
   GroupMemberStatus,
   PlayerStatus,

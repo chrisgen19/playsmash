@@ -19,6 +19,8 @@ Spin up a group, invite registered users or add temporary players on the spot, r
 - [Authorization model](#authorization-model)
 - [Testing](#testing)
 - [Development phases & checklist](#development-phases--checklist)
+- [Demo data](#demo-data)
+- [Deployment checklist](#deployment-checklist)
 
 ---
 
@@ -132,6 +134,7 @@ pnpm dev
 | `pnpm db:migrate` | `prisma migrate dev`. |
 | `pnpm db:generate` | Regenerate the Prisma client. |
 | `pnpm db:studio` | Open Prisma Studio. |
+| `pnpm db:seed` | Seed a demo group (idempotent — see [Demo data](#demo-data)). |
 | `pnpm format` | Prettier write. |
 
 ---
@@ -194,14 +197,16 @@ Implemented so far (Phases 1–2):
 | `GroupMember` | User ↔ Group link, with role + status. Unique on `(groupId, userId)`. |
 | `PlayerProfile` | A player in a group; `userId` nullable for temporary players. Unique on `(groupId, userId)`. |
 | `Invite` | A join code with optional expiry / max uses. |
-| `JoinRequest` | Pending request to join (workflow lands in Phase 8). |
-| `ActivityLog` | Audit trail of group changes (UI in Phase 8). |
+| `JoinRequest` | Pending request to join a `PUBLIC` group; approved/rejected by admins. |
+| `ActivityLog` | Audit trail of group changes, surfaced at `/groups/[groupId]/activity`. |
 | `PlaySession` | A scheduled play day — courts, scoring rules, status. Named `PlaySession` because Auth.js owns `Session`. |
 | `Court` | A court within a session. |
 | `SessionPlayer` | A player checked in to a session. Unique on `(sessionId, playerProfileId)`. |
 | `Match` | A generated doubles match — `sessionId`, `courtId?`, `roundNumber`, four team slots, scores, `winningTeam?`, `status`. Unique on `(sessionId, roundNumber, courtId)` to prevent any duplicate court schedule per round. |
 
-Planned (Phase 5+): `ScoreEvent`.
+A group carries a `status` (`ACTIVE` / `ARCHIVED`) — archiving is a soft delete that preserves all history.
+
+`ScoreEvent` from the original spec was not needed — the `Match` row holds the final score directly, and `ActivityLog` records every score edit.
 
 ---
 
@@ -220,7 +225,7 @@ Planned (Phase 5+): `ScoreEvent`.
 | Remove members | ✅ | partial¹ | ❌ | ❌ |
 | Delete group / transfer ownership | ✅ | ❌ | ❌ | ❌ |
 
-¹ Admins can manage PLAYER/VIEWER members but **cannot** demote or remove another ADMIN or the OWNER — only the OWNER can act on admins. The OWNER can never be demoted or removed (ownership transfer arrives in Phase 8).
+¹ Admins can manage PLAYER/VIEWER members but **cannot** demote or remove another ADMIN or the OWNER — only the OWNER can act on admins. The OWNER can never be demoted or removed from the members page; the OWNER reassigns the role via **ownership transfer** in group settings.
 
 Role hierarchy: **OWNER ⊇ ADMIN ⊇ PLAYER ⊇ VIEWER**. A check for `[PLAYER]` is satisfied by any higher role.
 
@@ -257,6 +262,7 @@ Unit tests (Vitest) cover the critical pure logic and services:
 - **Stacking** (Phase 4) — 4/1, 8/2, 9/2-with-rest invariants; repeated-partner & replay penalties; fair rotation (`max − min ≤ 1` over 9 rounds with 9 players / 2 courts); no duplicate player per round; determinism with fixed seed.
 - **Scoring** (Phase 5) — pure `validateScore` rule matrix (non-integer / negative / tied / below-points-to-win / win-by-two); service tests for start/complete/cancel/edit with locked status re-check.
 - **Stats** (Phase 6) — `computePlayerStats` (no division-by-zero); leaderboard ranking with winPct + gamesPlayed + differential tiebreak + stable id ordering; partner history counts + wins-together; zero-game players in the roster.
+- **Admin** (Phase 8) — ownership-transfer rules (cross-group / non-active / already-owner / lost-the-race), group edit + archive guards, join-request lifecycle (request / approve / reject), duplicate-name matching for the temp-player linker.
 - **Activity log** — writer payload + transaction passthrough.
 - **OAuth** — `email_verified` gate; **callback URLs** — open-redirect prevention.
 
@@ -266,7 +272,7 @@ Unit tests (Vitest) cover the critical pure logic and services:
 
 Playsmash is built phase by phase. Each phase ends with type-check + lint + tests + build all green.
 
-> **🎉 MVP cutoff reached at the end of Phase 6.** Every requirement from the [MVP definition of done](#mvp-definition-of-done) is shipped. Phases 7–8 are polish: realtime UX, ownership transfer, activity log UI, and a deployment checklist.
+> **🎉 All 8 phases shipped.** The MVP was reached at the end of Phase 6; Phases 7–8 added realtime UX, the activity-log UI, ownership transfer, join-request approval, and deployment tooling. See the [deployment checklist](#deployment-checklist).
 
 ### ✅ Phase 1 — Authentication & base schema
 
@@ -342,15 +348,16 @@ Playsmash is built phase by phase. Each phase ends with type-check + lint + test
 - [x] Mobile-friendly court assignment display
 - [x] Clear visual match/player states
 
-### ⬜ Phase 8 — Admin polish, audit & deployment
+### ✅ Phase 8 — Admin polish, audit & deployment
 
-- [ ] Activity log page
-- [ ] Ownership transfer
-- [ ] Group settings (edit name/visibility) + soft-delete behavior
-- [ ] Join request approval workflow
-- [ ] Duplicate temporary-player linking helper
-- [ ] Production deployment checklist + demo seed script
-- [ ] Final QA pass
+- [x] Activity log page at `/groups/[groupId]/activity` (paginated, OWNER/ADMIN)
+- [x] Ownership transfer (OWNER-only, confirm step, atomic + row-locked)
+- [x] Group settings — edit name / description / visibility
+- [x] Soft-delete: archive a group (`GroupStatus.ARCHIVED`) — drops off dashboards, rejects access
+- [x] Join request approval workflow for `PUBLIC` groups (`/request/[groupId]` → admin approve/reject)
+- [x] Duplicate temporary-player linking helper (name-match suggestions on the Players page)
+- [x] Production deployment checklist + demo seed script (`pnpm db:seed`)
+- [x] Final QA pass — tsc + lint + 170 tests + build green
 
 ### MVP definition of done
 
@@ -371,3 +378,44 @@ The MVP is complete when a user can register/login, create a group, invite or ad
 | Players can view scores | 5 |
 | Basic player stats | 6 |
 | Server-side permissions enforced | every phase |
+
+---
+
+## Demo data
+
+`pnpm db:seed` populates a ready-to-explore group. It's **idempotent** — re-running
+deletes the prior demo group and rebuilds it, so it's safe to run any time.
+
+It creates **Demo Pickleball Club** (join code `DEMO24`): an owner, an admin, two
+player members, four temporary "Guest" players, and an active session with two
+courts and two completed, scored matches.
+
+Sign in with any of these (password `playsmash-demo`):
+
+```
+demo.owner@playsmash.test   — OWNER
+demo.admin@playsmash.test   — ADMIN
+demo.pat@playsmash.test     — PLAYER
+demo.riley@playsmash.test   — PLAYER
+```
+
+---
+
+## Deployment checklist
+
+Playsmash is a standard Next.js app + a PostgreSQL database. To deploy:
+
+1. **Provision Postgres** and set `DATABASE_URL` on the host.
+2. **Set the remaining env vars** (see [Environment variables](#environment-variables)):
+   `AUTH_SECRET` (`openssl rand -base64 32`), `AUTH_URL` (the public origin), and —
+   only if using Google sign-in — `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`.
+3. **Install** — `pnpm install --frozen-lockfile`. `postinstall` runs `prisma generate`.
+4. **Apply migrations** — `pnpm dlx prisma migrate deploy` (never `migrate dev` in prod).
+5. **Build** — `pnpm build`.
+6. **Start** — `pnpm start` (or the platform's Next.js runtime).
+7. **Optional** — `pnpm db:seed` on a staging database only; never seed production.
+
+Notes:
+- The Prisma client is generated to `lib/db/generated/` (gitignored) — step 3 must run before step 5.
+- `proxy.ts` (Next 16 middleware) runs the edge-safe auth guard; no extra config needed.
+- Postgres 17 was used in development; any reasonably recent Postgres works.

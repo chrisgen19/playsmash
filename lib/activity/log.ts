@@ -9,10 +9,17 @@ export const ActivityAction = {
   // group lifecycle
   GROUP_CREATED: "group.created",
   GROUP_JOIN_CODE_REGENERATED: "group.join_code_regenerated",
+  GROUP_UPDATED: "group.updated",
+  GROUP_ARCHIVED: "group.archived",
+  GROUP_OWNERSHIP_TRANSFERRED: "group.ownership_transferred",
   // members
   MEMBER_JOINED: "member.joined",
   MEMBER_ROLE_CHANGED: "member.role_changed",
   MEMBER_REMOVED: "member.removed",
+  // join requests
+  JOIN_REQUEST_CREATED: "join_request.created",
+  JOIN_REQUEST_APPROVED: "join_request.approved",
+  JOIN_REQUEST_REJECTED: "join_request.rejected",
   // players
   PLAYER_CREATED_TEMP: "player.created_temp",
   PLAYER_UPDATED: "player.updated",
@@ -42,7 +49,8 @@ export type ActivityTargetType =
   | "PlayerProfile"
   | "Invite"
   | "PlaySession"
-  | "Match";
+  | "Match"
+  | "JoinRequest";
 
 export type LogActivityInput = {
   groupId: string;

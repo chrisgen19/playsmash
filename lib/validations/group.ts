@@ -38,3 +38,24 @@ export const joinGroupSchema = z.object({
 });
 
 export type JoinGroupInput = z.infer<typeof joinGroupSchema>;
+
+export const editGroupSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, { message: "Group name must be at least 2 characters" })
+    .max(80),
+  description: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v && v.length > 0 ? v : undefined)),
+  visibility: z.enum([
+    GroupVisibility.PRIVATE,
+    GroupVisibility.INVITE_ONLY,
+    GroupVisibility.PUBLIC,
+  ]),
+});
+
+export type EditGroupInput = z.infer<typeof editGroupSchema>;

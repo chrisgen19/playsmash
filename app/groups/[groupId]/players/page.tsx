@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 
 import { AddTempPlayerForm } from "@/components/groups/add-temp-player-form";
 import { PlayerRowActions } from "@/components/groups/player-row-actions";
+import { SuggestedLinks } from "@/components/groups/suggested-links";
+import { suggestDuplicateLinks } from "@/lib/players/duplicate-suggestions";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -88,6 +90,21 @@ export default async function GroupPlayersPage({
       ([u.firstName, u.lastName].filter(Boolean).join(" ") || u.email),
   }));
 
+  // Likely-duplicate suggestions: a temporary profile whose name matches a
+  // member who has no profile yet. Admins can one-click link these.
+  const tempPlayers = players
+    .filter((p) => p.userId === null && p.status !== PlayerStatus.REMOVED)
+    .map((p) => ({ id: p.id, displayName: p.displayName }));
+  const duplicateSuggestions = canManage
+    ? suggestDuplicateLinks(
+        tempPlayers,
+        linkCandidates.map((c) => ({
+          userId: c.userId,
+          displayName: c.label,
+        })),
+      )
+    : [];
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <div className="mb-6">
@@ -97,6 +114,26 @@ export default async function GroupPlayersPage({
           group, including temporary profiles.
         </p>
       </div>
+
+      {canManage && duplicateSuggestions.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Possible duplicates ({duplicateSuggestions.length})
+            </CardTitle>
+            <CardDescription>
+              These temporary players look like members who just joined.
+              Linking keeps their match history on the original profile.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SuggestedLinks
+              groupId={groupId}
+              suggestions={duplicateSuggestions}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {canManage && (
         <Card className="mb-4">

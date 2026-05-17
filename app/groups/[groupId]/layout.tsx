@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { GroupTabs } from "@/components/groups/group-tabs";
 import { AppHeader } from "@/components/shared/app-header";
 import { requireUser } from "@/lib/auth/session";
-import { GroupRole } from "@/lib/db";
+import { prisma, GroupRole, GroupStatus } from "@/lib/db";
 import {
   ForbiddenError,
   NotFoundError,
@@ -40,6 +40,13 @@ export default async function GroupLayout({
     if (err instanceof ForbiddenError) redirect("/dashboard");
     throw err;
   }
+
+  // Archived groups are read-frozen — bounce everyone back to the dashboard.
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    select: { status: true },
+  });
+  if (group?.status === GroupStatus.ARCHIVED) redirect("/dashboard");
 
   const role = await getGroupRole(user.id, groupId);
   const showSettings =

@@ -12,14 +12,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
-import { prisma, GroupMemberStatus, PlayerStatus } from "@/lib/db";
+import {
+  prisma,
+  GroupMemberStatus,
+  GroupStatus,
+  PlayerStatus,
+} from "@/lib/db";
 import type { GroupRoleValue } from "@/lib/permissions/group";
 
 export default async function DashboardPage() {
   const user = await requireUser("/dashboard");
 
   const memberships = await prisma.groupMember.findMany({
-    where: { userId: user.id, status: GroupMemberStatus.ACTIVE },
+    // Archived groups drop off the dashboard.
+    where: {
+      userId: user.id,
+      status: GroupMemberStatus.ACTIVE,
+      group: { status: GroupStatus.ACTIVE },
+    },
     orderBy: { joinedAt: "desc" },
     select: {
       role: true,

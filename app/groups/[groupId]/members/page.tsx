@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 
+import { JoinRequestActions } from "@/components/groups/join-request-actions";
 import { MemberRowActions } from "@/components/groups/member-row-actions";
 import { RoleBadge } from "@/components/shared/role-badge";
 import {
@@ -10,7 +11,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
-import { prisma, GroupMemberStatus, GroupRole } from "@/lib/db";
+import {
+  prisma,
+  GroupMemberStatus,
+  GroupRole,
+  JoinRequestStatus,
+} from "@/lib/db";
 import { getGroupRole } from "@/lib/permissions/group";
 import type { GroupRoleValue } from "@/lib/permissions/roles";
 
@@ -46,6 +52,26 @@ export default async function GroupMembersPage({
     },
   });
 
+  // Pending join requests — admins approve/reject them here.
+  const pendingRequests = canManage
+    ? await prisma.joinRequest.findMany({
+        where: { groupId, status: JoinRequestStatus.PENDING },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          createdAt: true,
+          user: {
+            select: {
+              name: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      })
+    : [];
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <div className="mb-6">
@@ -58,12 +84,52 @@ export default async function GroupMembersPage({
         </p>
       </div>
 
+      {canManage && pendingRequests.length > 0 && (
+        <Card className="mb-4">
+          <CardHeader>
+            <CardTitle className="text-base">
+              Pending join requests ({pendingRequests.length})
+            </CardTitle>
+            <CardDescription>
+              Requests from public-group join links. Approving adds the user
+              as a player.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="divide-border/60 divide-y">
+            {pendingRequests.map((r) => {
+              const displayName =
+                r.user.name ??
+                ([r.user.firstName, r.user.lastName]
+                  .filter(Boolean)
+                  .join(" ") || r.user.email);
+              return (
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center justify-between gap-3 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {displayName}
+                    </p>
+                    <p className="text-muted-foreground truncate text-xs">
+                      {r.user.email} · requested{" "}
+                      {r.createdAt.toISOString().slice(0, 10)}
+                    </p>
+                  </div>
+                  <JoinRequestActions groupId={groupId} requestId={r.id} />
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Roster</CardTitle>
           <CardDescription>
-            Owner can&apos;t be removed or demoted from this page. Phase 8 adds
-            ownership transfer.
+            The owner can&apos;t be removed or demoted here — use ownership
+            transfer in Settings.
           </CardDescription>
         </CardHeader>
         <CardContent className="divide-border/60 divide-y">
