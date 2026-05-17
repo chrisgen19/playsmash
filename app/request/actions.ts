@@ -17,6 +17,7 @@ const MSG: Record<JoinRequestError["code"], string> = {
   ALREADY_MEMBER: "You're already a member of this group.",
   ALREADY_PENDING: "Your request is already pending — hang tight.",
   BANNED: "You can't join this group.",
+  MEMBER_BANNED: "You can't join this group.",
   REQUEST_NOT_PENDING: "That request is no longer pending.",
 };
 

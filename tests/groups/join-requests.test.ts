@@ -194,6 +194,70 @@ describe("approveJoinRequest", () => {
     expect(txMocks.playerProfile.create).toHaveBeenCalled();
   });
 
+  it("rejects approval when the user was BANNED after requesting (cannot silently unban)", async () => {
+    txMocks.groupMember.findUnique.mockResolvedValue({
+      id: "m_1",
+      role: "PLAYER",
+      status: GroupMemberStatus.BANNED,
+    });
+    await expect(
+      approveJoinRequest({
+        groupId: "g_1",
+        actorUserId: "u_admin",
+        requestId: "jr_1",
+      }),
+    ).rejects.toMatchObject({ code: "MEMBER_BANNED" });
+    // No membership/profile/request writes happen before the throw.
+    expect(txMocks.joinRequest.update).not.toHaveBeenCalled();
+    expect(txMocks.groupMember.update).not.toHaveBeenCalled();
+    expect(txMocks.groupMember.create).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent when the user is already ACTIVE — flips request, no membership write", async () => {
+    txMocks.groupMember.findUnique.mockResolvedValue({
+      id: "m_1",
+      role: "ADMIN", // an admin who's already in the group
+      status: GroupMemberStatus.ACTIVE,
+    });
+    txMocks.playerProfile.findUnique.mockResolvedValue({
+      id: "pp_1",
+      status: "ACTIVE",
+    });
+    await approveJoinRequest({
+      groupId: "g_1",
+      actorUserId: "u_admin",
+      requestId: "jr_1",
+    });
+    expect(txMocks.joinRequest.update).toHaveBeenCalledWith({
+      where: { id: "jr_1" },
+      data: { status: JoinRequestStatus.APPROVED },
+    });
+    // The existing ADMIN must NOT be silently demoted to PLAYER or "re-joined".
+    expect(txMocks.groupMember.update).not.toHaveBeenCalled();
+    expect(txMocks.groupMember.create).not.toHaveBeenCalled();
+  });
+
+  it("revives a LEFT/REMOVED member as PLAYER on approval", async () => {
+    txMocks.groupMember.findUnique.mockResolvedValue({
+      id: "m_left",
+      role: "PLAYER",
+      status: GroupMemberStatus.LEFT,
+    });
+    await approveJoinRequest({
+      groupId: "g_1",
+      actorUserId: "u_admin",
+      requestId: "jr_1",
+    });
+    expect(txMocks.groupMember.update).toHaveBeenCalledWith({
+      where: { id: "m_left" },
+      data: expect.objectContaining({
+        role: "PLAYER",
+        status: GroupMemberStatus.ACTIVE,
+      }),
+    });
+    expect(txMocks.groupMember.create).not.toHaveBeenCalled();
+  });
+
   it("locks the request row with SELECT ... FOR UPDATE", async () => {
     await approveJoinRequest({
       groupId: "g_1",

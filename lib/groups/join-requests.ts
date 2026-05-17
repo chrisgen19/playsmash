@@ -19,6 +19,7 @@ export class JoinRequestError extends Error {
       | "ALREADY_MEMBER"
       | "ALREADY_PENDING"
       | "BANNED"
+      | "MEMBER_BANNED"
       | "REQUEST_NOT_PENDING",
     message: string,
   ) {
@@ -198,34 +199,50 @@ export async function approveJoinRequest(params: {
       request.user.email.split("@")[0] ||
       "Player";
 
+    // Check the existing membership BEFORE flipping the request — a BANNED
+    // user shouldn't have their ban silently undone by approving a stale
+    // request, and an already-ACTIVE member shouldn't get their role reset.
+    const member = await tx.groupMember.findUnique({
+      where: {
+        groupId_userId: { groupId: params.groupId, userId: request.userId },
+      },
+      select: { id: true, role: true, status: true },
+    });
+    if (member?.status === GroupMemberStatus.BANNED) {
+      throw new JoinRequestError(
+        "MEMBER_BANNED",
+        "This user is banned from the group; lift the ban before approving",
+      );
+    }
+
     await tx.joinRequest.update({
       where: { id: params.requestId },
       data: { status: JoinRequestStatus.APPROVED },
     });
 
-    // Member: revive a LEFT/REMOVED row or create fresh.
-    const member = await tx.groupMember.findUnique({
-      where: {
-        groupId_userId: { groupId: params.groupId, userId: request.userId },
-      },
-      select: { id: true },
-    });
-    if (member) {
-      await tx.groupMember.update({
-        where: { id: member.id },
-        data: {
-          role: GroupRole.PLAYER,
-          status: GroupMemberStatus.ACTIVE,
-          joinedAt: new Date(),
-        },
-      });
-    } else {
+    // Membership transitions:
+    //   - ACTIVE → no-op (already a member; the approve is idempotent on the
+    //     membership side, the request flips to APPROVED).
+    //   - LEFT / REMOVED / INVITED → revive as PLAYER + ACTIVE. They went
+    //     through a join-request flow which is by definition a "fresh start"
+    //     as a player; an admin can re-promote afterwards if needed.
+    //   - no row → create as PLAYER + ACTIVE.
+    if (!member) {
       await tx.groupMember.create({
         data: {
           groupId: params.groupId,
           userId: request.userId,
           role: GroupRole.PLAYER,
           status: GroupMemberStatus.ACTIVE,
+        },
+      });
+    } else if (member.status !== GroupMemberStatus.ACTIVE) {
+      await tx.groupMember.update({
+        where: { id: member.id },
+        data: {
+          role: GroupRole.PLAYER,
+          status: GroupMemberStatus.ACTIVE,
+          joinedAt: new Date(),
         },
       });
     }

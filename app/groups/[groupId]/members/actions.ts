@@ -38,6 +38,7 @@ const JOIN_REQUEST_MESSAGE: Record<JoinRequestError["code"], string> = {
   ALREADY_MEMBER: "That user is already a member.",
   ALREADY_PENDING: "A request is already pending.",
   BANNED: "That user is banned from this group.",
+  MEMBER_BANNED: "That user is banned — lift the ban before approving.",
   REQUEST_NOT_PENDING: "This request is no longer pending.",
 };
 
