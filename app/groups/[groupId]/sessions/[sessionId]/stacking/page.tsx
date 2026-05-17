@@ -2,8 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { GenerateRoundButton } from "@/components/sessions/generate-round-button";
+import { LiveSessionRefresh } from "@/components/sessions/live-session-refresh";
 import { MatchControls } from "@/components/sessions/match-controls";
-import { Badge } from "@/components/ui/badge";
+import {
+  MatchStatusBadge,
+  PlayerStateChip,
+  SessionStatusBadge,
+} from "@/components/sessions/session-state";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -111,20 +116,26 @@ export default async function StackingPage({
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Round {currentRound || "—"}
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            {session.name} · {session.status}
-          </p>
+          <div className="mb-1 flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Round {currentRound || "—"}
+            </h1>
+            <SessionStatusBadge status={session.status} />
+          </div>
+          <p className="text-muted-foreground text-sm">{session.name}</p>
         </div>
-        {canManage && session.status === PlaySessionStatus.ACTIVE && (
-          <GenerateRoundButton
-            groupId={groupId}
-            sessionId={session.id}
-            hasOpenRound={hasOpenRound}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <LiveSessionRefresh
+            enabled={session.status === PlaySessionStatus.ACTIVE}
           />
-        )}
+          {canManage && session.status === PlaySessionStatus.ACTIVE && (
+            <GenerateRoundButton
+              groupId={groupId}
+              sessionId={session.id}
+              hasOpenRound={hasOpenRound}
+            />
+          )}
+        </div>
       </div>
 
       {matches.length === 0 ? (
@@ -141,30 +152,32 @@ export default async function StackingPage({
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {matches.map((m) => (
-            <Card key={m.id}>
+            <Card key={m.id} className="overflow-hidden">
               <CardHeader className="pb-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-base">Match</CardTitle>
+                  <MatchStatusBadge status={m.status} />
+                </div>
                 <CardDescription>
                   {courtNameById.get(m.courtId ?? "") ?? "Unassigned court"}
                 </CardDescription>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base">Match</CardTitle>
-                  <Badge variant="secondary">{m.status}</Badge>
-                </div>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <TeamLine
-                  label="Team 1"
-                  names={[m.team1P1.displayName, m.team1P2?.displayName]}
-                />
-                <div className="text-muted-foreground text-center text-xs uppercase">
-                  vs
+              <CardContent className="space-y-3 text-sm">
+                <div className="grid gap-2 min-[420px]:grid-cols-[1fr_auto_1fr] min-[420px]:items-stretch">
+                  <TeamLine
+                    label="Team 1"
+                    names={[m.team1P1.displayName, m.team1P2?.displayName]}
+                  />
+                  <div className="text-muted-foreground flex items-center justify-center text-xs font-medium uppercase">
+                    vs
+                  </div>
+                  <TeamLine
+                    label="Team 2"
+                    names={[m.team2P1.displayName, m.team2P2?.displayName]}
+                  />
                 </div>
-                <TeamLine
-                  label="Team 2"
-                  names={[m.team2P1.displayName, m.team2P2?.displayName]}
-                />
                 {canManage &&
                   (m.status === MatchStatus.QUEUED ||
                     m.status === MatchStatus.ACTIVE) && (
@@ -204,9 +217,9 @@ export default async function StackingPage({
               <span className="text-muted-foreground text-xs">—</span>
             ) : (
               waiting.map((sp) => (
-                <Badge key={sp.id} variant="outline">
+                <PlayerStateChip key={sp.id} status={sp.status}>
                   {sp.player.displayName}
-                </Badge>
+                </PlayerStateChip>
               ))
             )}
           </CardContent>
@@ -223,9 +236,9 @@ export default async function StackingPage({
               <span className="text-muted-foreground text-xs">—</span>
             ) : (
               resting.map((sp) => (
-                <Badge key={sp.id} variant="outline">
+                <PlayerStateChip key={sp.id} status={sp.status}>
                   {sp.player.displayName}
-                </Badge>
+                </PlayerStateChip>
               ))
             )}
           </CardContent>
@@ -244,11 +257,13 @@ function TeamLine({
 }) {
   const present = names.filter((n): n is string => !!n);
   return (
-    <div>
-      <p className="text-muted-foreground text-xs uppercase tracking-wider">
+    <div className="border-border/70 rounded-lg border px-3 py-2">
+      <p className="text-muted-foreground text-xs tracking-wider uppercase">
         {label}
       </p>
-      <p className="font-medium">{present.join(" + ")}</p>
+      <p className="mt-1 text-sm leading-5 font-medium">
+        {present.join(" + ")}
+      </p>
     </div>
   );
 }

@@ -7,10 +7,7 @@ import {
   GenerateRoundError,
   generateNextRound,
 } from "@/lib/sessions/generate-round";
-import {
-  ForbiddenError,
-  NotFoundError,
-} from "@/lib/permissions/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/permissions/errors";
 import { requireGroupRole } from "@/lib/permissions/group";
 
 const OWNERS_AND_ADMINS = [GroupRole.OWNER, GroupRole.ADMIN] as const;
@@ -49,6 +46,7 @@ export async function generateRoundAction(
       sessionId,
     });
     revalidatePath(`/groups/${groupId}/sessions/${sessionId}/stacking`);
+    revalidatePath(`/groups/${groupId}/sessions/${sessionId}/scores`);
     revalidatePath(`/groups/${groupId}/sessions/${sessionId}`);
     return {
       success: `Round ${r.roundNumber} ready (${r.matchesCreated} match${

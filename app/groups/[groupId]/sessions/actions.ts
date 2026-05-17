@@ -4,10 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { GroupRole } from "@/lib/db";
-import {
-  ForbiddenError,
-  NotFoundError,
-} from "@/lib/permissions/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/permissions/errors";
 import { requireGroupRole } from "@/lib/permissions/group";
 import {
   SessionActionError,
@@ -131,5 +128,7 @@ export async function startSessionAction(
   }
 
   revalidatePath(`/groups/${groupId}/sessions/${sessionId}`);
+  revalidatePath(`/groups/${groupId}/sessions/${sessionId}/stacking`);
+  revalidatePath(`/groups/${groupId}/sessions/${sessionId}/scores`);
   return {};
 }
