@@ -28,16 +28,16 @@ export function LoginForm({
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       <header className="space-y-2">
-        <p className="eyebrow text-muted-foreground inline-flex items-center gap-2">
-          <span aria-hidden className="inline-block size-1.5 bg-accent" />
-          Welcome back
-        </p>
-        <h1 className="font-display text-3xl tracking-tight">Sign in</h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="md-label-lg text-primary">Welcome back</p>
+        <h1 className="md-headline-md text-foreground">Sign in to Playsmash</h1>
+        <p className="md-body-md text-muted-foreground">
           New here?{" "}
-          <Link href="/register" className="text-foreground underline underline-offset-4">
+          <Link
+            href="/register"
+            className="text-primary underline underline-offset-4"
+          >
             Create an account
           </Link>
           .
@@ -49,8 +49,10 @@ export function LoginForm({
           <input type="hidden" name="callbackUrl" value={callbackUrl} />
         )}
 
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="email" className="md-label-md">
+            Email
+          </Label>
           <Input
             id="email"
             name="email"
@@ -60,8 +62,10 @@ export function LoginForm({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
+        <div className="space-y-1.5">
+          <Label htmlFor="password" className="md-label-md">
+            Password
+          </Label>
           <Input
             id="password"
             name="password"
@@ -72,12 +76,21 @@ export function LoginForm({
         </div>
 
         {state.error && (
-          <p className="text-destructive text-sm" role="alert">
+          <p
+            className="md-body-sm rounded-md bg-[color:var(--md-sys-color-error-container)] px-3 py-2 text-[color:var(--md-sys-color-on-error-container)]"
+            role="alert"
+          >
             {state.error}
           </p>
         )}
 
-        <Button type="submit" variant="accent" size="lg" disabled={pending} className="w-full">
+        <Button
+          type="submit"
+          variant="filled"
+          size="lg"
+          disabled={pending}
+          className="w-full"
+        >
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
@@ -86,14 +99,19 @@ export function LoginForm({
         <>
           <div className="flex items-center gap-3">
             <Separator className="flex-1" />
-            <span className="text-muted-foreground text-xs uppercase">or</span>
+            <span className="md-label-md text-muted-foreground">OR</span>
             <Separator className="flex-1" />
           </div>
           <form action={signInWithGoogleAction}>
             {callbackUrl && (
               <input type="hidden" name="callbackUrl" value={callbackUrl} />
             )}
-            <Button type="submit" variant="outline" size="lg" className="w-full">
+            <Button
+              type="submit"
+              variant="outlined"
+              size="lg"
+              className="w-full"
+            >
               Continue with Google
             </Button>
           </form>

@@ -11,12 +11,12 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration guard for next-themes
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- next-themes hydration guard
     setMounted(true);
   }, []);
 
   if (!mounted) {
-    return <div aria-hidden className="size-8" />;
+    return <div aria-hidden className="size-10" />;
   }
 
   const isDark = resolvedTheme === "dark";
@@ -24,20 +24,20 @@ export function ThemeToggle() {
   return (
     <Button
       type="button"
-      variant="ghost"
+      variant="text"
       size="icon"
       aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
       className="relative"
     >
       <Sun
-        className={`size-4 transition-transform duration-200 ${
-          isDark ? "rotate-90 scale-0" : "rotate-0 scale-100"
+        className={`size-5 transition-all duration-200 ${
+          isDark ? "rotate-90 scale-0 opacity-0" : "rotate-0 scale-100 opacity-100"
         }`}
       />
       <Moon
-        className={`absolute size-4 transition-transform duration-200 ${
-          isDark ? "rotate-0 scale-100" : "-rotate-90 scale-0"
+        className={`absolute size-5 transition-all duration-200 ${
+          isDark ? "rotate-0 scale-100 opacity-100" : "-rotate-90 scale-0 opacity-0"
         }`}
       />
     </Button>

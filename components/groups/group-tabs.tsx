@@ -35,22 +35,24 @@ export function GroupTabs({
   ];
 
   return (
-    <nav className="border-border/60 mx-auto w-full max-w-4xl border-b px-6">
-      <ul className="-mb-px flex gap-1">
+    <nav className="sticky top-16 z-10 border-b border-[color:var(--md-sys-color-outline-variant)] bg-[color:var(--md-sys-color-surface-container)]/95 backdrop-blur">
+      <ul className="mx-auto flex w-full max-w-6xl gap-1 overflow-x-auto px-4 sm:px-6">
         {tabs.map((t) => {
           const active =
             t.href === base
               ? pathname === base
               : pathname === t.href || pathname.startsWith(`${t.href}/`);
           return (
-            <li key={t.href}>
+            <li key={t.href} className="shrink-0">
               <Link
                 href={t.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "inline-block border-b-2 px-3 py-2 text-sm transition-colors",
+                  "md-state-layer md-label-lg relative inline-flex h-12 items-center px-4 transition-colors",
+                  "after:absolute after:bottom-0 after:left-2 after:right-2 after:h-[3px] after:rounded-t-md after:bg-primary after:transition-opacity",
                   active
-                    ? "border-foreground text-foreground"
-                    : "text-muted-foreground hover:text-foreground border-transparent",
+                    ? "text-primary after:opacity-100"
+                    : "text-muted-foreground hover:text-foreground after:opacity-0",
                 )}
               >
                 {t.label}

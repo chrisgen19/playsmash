@@ -8,57 +8,43 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="grid flex-1 grid-cols-1 md:grid-cols-2">
-      {/* Editorial panel */}
-      <aside className="relative hidden md:flex flex-col justify-between bg-foreground text-background p-10 lg:p-14">
+    <>
+      <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-[color:var(--md-sys-color-outline-variant)] bg-[color:var(--md-sys-color-surface-container)]/95 px-4 backdrop-blur-md sm:px-6">
         <Link
           href="/"
-          className="font-display text-base tracking-tight inline-flex items-center gap-2"
+          className="md-state-layer flex items-center gap-2.5 rounded-full px-2 py-1.5 -ml-2"
         >
-          <span aria-hidden className="inline-block size-2 bg-accent rounded-[1px]" />
-          Playsmash
-        </Link>
-        <div className="space-y-6">
-          <p className="eyebrow text-background/70 inline-flex items-center gap-2">
-            <span aria-hidden className="inline-block size-1.5 bg-accent" />
-            For clubs &amp; casual courts
-          </p>
-          <p className="font-display text-4xl leading-[1.05] tracking-tight lg:text-5xl">
-            Fair rotations.{" "}
-            <em className="text-accent not-italic">Clean</em> scoresheets.
-            Players happy.
-          </p>
-          <div className="flex items-baseline gap-6 border-t border-background/15 pt-6">
-            <div>
-              <p className="numeric text-3xl">21</p>
-              <p className="eyebrow text-background/60 mt-1">Point games</p>
-            </div>
-            <div>
-              <p className="numeric text-3xl">∞</p>
-              <p className="eyebrow text-background/60 mt-1">Rotations</p>
-            </div>
-          </div>
-        </div>
-        <p className="eyebrow text-background/50">Issue No. 01</p>
-      </aside>
-
-      {/* Form column */}
-      <section className="flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 md:px-10">
-          <Link
-            href="/"
-            className="font-display text-sm tracking-tight inline-flex items-center gap-2 md:hidden"
+          <span
+            aria-hidden
+            className="grid size-8 place-items-center rounded-lg bg-primary text-[color:var(--md-sys-color-on-primary)] md-title-sm"
           >
-            <span aria-hidden className="inline-block size-2 bg-accent rounded-[1px]" />
-            Playsmash
-          </Link>
-          <span className="hidden md:inline" />
-          <ThemeToggle />
+            P
+          </span>
+          <span className="md-title-md">Playsmash</span>
+        </Link>
+        <ThemeToggle />
+      </header>
+
+      <main className="relative flex flex-1 items-center justify-center overflow-hidden px-4 py-12">
+        <div
+          aria-hidden
+          className="absolute -top-32 left-1/2 -z-10 size-[36rem] -translate-x-1/2 rounded-full bg-[color:var(--md-sys-color-primary-container)] opacity-50 blur-3xl"
+        />
+        <div
+          aria-hidden
+          className="absolute bottom-0 right-0 -z-10 size-[22rem] translate-x-1/3 translate-y-1/3 rounded-full bg-[color:var(--md-sys-color-tertiary-container)] opacity-50 blur-3xl"
+        />
+
+        <div className="w-full max-w-md">
+          <div className="md-elev-2 rounded-2xl bg-[color:var(--md-sys-color-surface-container-lowest)] p-8 sm:p-10">
+            {children}
+          </div>
+          <p className="md-body-sm text-muted-foreground mt-6 text-center">
+            By continuing you agree to fair play, fair rotations, and fewer
+            spreadsheets.
+          </p>
         </div>
-        <div className="flex flex-1 items-center justify-center px-6 py-10 md:px-10">
-          <div className="w-full max-w-sm">{children}</div>
-        </div>
-      </section>
-    </main>
+      </main>
+    </>
   );
 }
