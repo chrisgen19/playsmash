@@ -32,6 +32,8 @@ const PLAYER_MSG: Record<PlayerActionError["code"], string> = {
   TARGET_USER_NOT_IN_GROUP: "Target user is not an active member.",
   TARGET_USER_ALREADY_HAS_PROFILE:
     "That user already has a player profile in this group.",
+  INVALID_STATUS_TRANSITION:
+    "A linked player cannot be made temporary.",
 };
 
 function toMessage(err: unknown): string {

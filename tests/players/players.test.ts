@@ -100,6 +100,7 @@ describe("setPlayerStatus", () => {
       id: "pp_1",
       groupId: "g_1",
       status: PlayerStatus.ACTIVE,
+      userId: null,
     });
     await setPlayerStatus({
       groupId: "g_1",
@@ -112,6 +113,24 @@ describe("setPlayerStatus", () => {
       data: { status: PlayerStatus.REMOVED },
     });
     expect(txMocks.activityLog.create).toHaveBeenCalled();
+  });
+
+  it("rejects setting a user-linked player to TEMPORARY", async () => {
+    prismaMock.playerProfile.findUnique.mockResolvedValue({
+      id: "pp_linked",
+      groupId: "g_1",
+      status: PlayerStatus.ACTIVE,
+      userId: "u_bob",
+    });
+    await expect(
+      setPlayerStatus({
+        groupId: "g_1",
+        actorUserId: "u_admin",
+        playerId: "pp_linked",
+        status: PlayerStatus.TEMPORARY,
+      }),
+    ).rejects.toMatchObject({ code: "INVALID_STATUS_TRANSITION" });
+    expect(txMocks.playerProfile.update).not.toHaveBeenCalled();
   });
 });
 

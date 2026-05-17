@@ -51,13 +51,16 @@ export const editPlayerSchema = z.object({
 
 export type EditPlayerInput = z.infer<typeof editPlayerSchema>;
 
+// TEMPORARY is deliberately excluded — it means "account-less profile" and
+// is only ever set at creation time (createTempPlayer). Allowing it here
+// would let a linked player (userId != null) be flipped to TEMPORARY,
+// an inconsistent state. The service layer enforces the same rule.
 export const setPlayerStatusSchema = z.object({
   playerId: z.string().min(1),
   status: z.enum([
     PlayerStatus.ACTIVE,
     PlayerStatus.INACTIVE,
     PlayerStatus.REMOVED,
-    PlayerStatus.TEMPORARY,
   ]),
 });
 

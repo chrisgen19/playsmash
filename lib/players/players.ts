@@ -13,7 +13,8 @@ export class PlayerActionError extends Error {
       | "ALREADY_LINKED"
       | "DUPLICATE_TEMP_NAME_RESERVED"
       | "TARGET_USER_NOT_IN_GROUP"
-      | "TARGET_USER_ALREADY_HAS_PROFILE",
+      | "TARGET_USER_ALREADY_HAS_PROFILE"
+      | "INVALID_STATUS_TRANSITION",
     message: string,
   ) {
     super(message);
@@ -129,10 +130,19 @@ export async function setPlayerStatus(params: {
 }): Promise<void> {
   const current = await prisma.playerProfile.findUnique({
     where: { id: params.playerId },
-    select: { id: true, groupId: true, status: true },
+    select: { id: true, groupId: true, status: true, userId: true },
   });
   if (!current || current.groupId !== params.groupId) {
     throw new NotFoundError("Player not found in this group");
+  }
+  // TEMPORARY means "account-less profile". A profile linked to a user can
+  // never be temporary — guard here so the rule holds even if a caller
+  // bypasses the Zod schema.
+  if (params.status === PlayerStatus.TEMPORARY && current.userId !== null) {
+    throw new PlayerActionError(
+      "INVALID_STATUS_TRANSITION",
+      "A player linked to a user account cannot be set TEMPORARY",
+    );
   }
   if (current.status === params.status) return;
 

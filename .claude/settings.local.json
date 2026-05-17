@@ -35,7 +35,9 @@
       "Bash(git pull *)",
       "Bash(git stash *)",
       "Bash(git fetch *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(git config *)",
+      "Bash(git commit *)"
     ]
   }
 }
