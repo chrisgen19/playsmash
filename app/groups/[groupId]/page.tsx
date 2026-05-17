@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { RoleBadge } from "@/components/shared/role-badge";
@@ -8,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { prisma, GroupMemberStatus, PlayerStatus } from "@/lib/db";
+import { prisma, GroupMemberStatus, GroupRole, PlayerStatus } from "@/lib/db";
 import { requireUser } from "@/lib/auth/session";
 import { getGroupRole } from "@/lib/permissions/group";
 
@@ -22,6 +23,8 @@ export default async function GroupPage({
   // Layout already authorized — this is for the typed role badge.
   const role = await getGroupRole(user.id, groupId);
   if (!role) notFound();
+
+  const canManage = role === GroupRole.OWNER || role === GroupRole.ADMIN;
 
   const group = await prisma.group.findUnique({
     where: { id: groupId },
@@ -69,30 +72,52 @@ export default async function GroupPage({
             </CardTitle>
           </CardHeader>
           <CardContent className="text-muted-foreground text-xs">
-            Share this with players so they can join. Regeneration arrives in
-            Phase 2.
+            Share this with players so they can join
+            {canManage ? (
+              <>
+                {" "}
+                — or{" "}
+                <Link
+                  href={`/groups/${group.id}/settings`}
+                  className="text-foreground underline"
+                >
+                  regenerate it
+                </Link>
+                .
+              </>
+            ) : (
+              "."
+            )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardDescription>Members</CardDescription>
-            <CardTitle className="text-2xl">{group._count.members}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground text-xs">
-            Registered accounts in this group.
-          </CardContent>
-        </Card>
+        <Link href={`/groups/${group.id}/members`}>
+          <Card className="hover:border-foreground/20 h-full transition-colors">
+            <CardHeader>
+              <CardDescription>Members</CardDescription>
+              <CardTitle className="text-2xl">
+                {group._count.members}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground text-xs">
+              Registered accounts. Manage roles →
+            </CardContent>
+          </Card>
+        </Link>
 
-        <Card>
-          <CardHeader>
-            <CardDescription>Players</CardDescription>
-            <CardTitle className="text-2xl">{group._count.players}</CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground text-xs">
-            Profiles available for sessions (incl. temporary).
-          </CardContent>
-        </Card>
+        <Link href={`/groups/${group.id}/players`}>
+          <Card className="hover:border-foreground/20 h-full transition-colors">
+            <CardHeader>
+              <CardDescription>Players</CardDescription>
+              <CardTitle className="text-2xl">
+                {group._count.players}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-muted-foreground text-xs">
+              Profiles for sessions, incl. temporary →
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       <Card className="mt-6">
@@ -105,7 +130,7 @@ export default async function GroupPage({
         </CardHeader>
         <CardContent className="text-muted-foreground text-sm">
           Sessions and court rotation arrive in Phase 3 / Phase 4. The current
-          build covers auth, group creation, and role-based access only.
+          build covers auth, groups, members, players, and invites.
         </CardContent>
       </Card>
     </main>

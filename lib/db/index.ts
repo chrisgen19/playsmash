@@ -18,4 +18,5 @@ export type {
   PlayerProfile,
   Invite,
   JoinRequest,
+  ActivityLog,
 } from "./generated/client";

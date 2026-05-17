@@ -1,36 +1,342 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏓 Playsmash
 
-## Getting Started
+Pickleball group management, partner stacking, court rotation, and scoring — built so **not every player needs an account**.
 
-First, run the development server:
+Spin up a group, invite registered users or add temporary players on the spot, run play sessions, generate fair doubles court rotations, and track scores and history.
+
+---
+
+## Table of contents
+
+- [Core concept](#core-concept)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [Scripts](#scripts)
+- [Project structure](#project-structure)
+- [Data model](#data-model)
+- [Roles & permissions](#roles--permissions)
+- [Authorization model](#authorization-model)
+- [Testing](#testing)
+- [Development phases & checklist](#development-phases--checklist)
+
+---
+
+## Core concept
+
+Playsmash deliberately separates four concepts so that temporary, walk-in players are first-class from day one:
+
+| Concept | What it is |
+|---|---|
+| **User Account** | A real registered login identity (`User`). |
+| **Player Profile** | A person who plays in a group (`PlayerProfile`). May or may not be linked to a `User` — temporary players have `userId = null`. |
+| **Group Membership** | The relationship between a `User` and a `Group`, carrying their role (`GroupMember`). |
+| **Session Player** | A player participating in one specific play session (`SessionPlayer`, Phase 3+). |
+
+A temporary player is **not a role** — it is a `PlayerProfile` with no `userId`. It can be added to sessions and matches, can't log in, and can later be linked to a real account without losing match history.
+
+---
+
+## Tech stack
+
+| Concern | Choice |
+|---|---|
+| Framework | Next.js 16 (App Router, Turbopack) |
+| Language | TypeScript (strict) |
+| Runtime | Node 20+ |
+| Database | PostgreSQL 17 |
+| ORM | Prisma 7 (`@prisma/adapter-pg` driver adapter) |
+| Auth | Auth.js v5 (NextAuth) — Credentials + optional Google OAuth |
+| UI | shadcn/ui + Radix + Tailwind CSS v4 |
+| Forms | React Hook Form + Zod |
+| Tests | Vitest |
+| Package manager | pnpm |
+
+> **Note on Next.js 16** — middleware is now `proxy.ts`; the connection string lives in `prisma.config.ts` (Prisma 7 no longer allows `datasource.url` in the schema); the generated Prisma client is project-local at `lib/db/generated/` and gitignored (regenerated via `postinstall`).
+
+---
+
+## Getting started
+
+### Prerequisites
+
+- Node 20+ and pnpm
+- PostgreSQL 17 running locally
+
+### 1. Create the database
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+createdb playsmash
+# or, with an explicit role:
+psql -d postgres -c "CREATE DATABASE playsmash OWNER myuser;"
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Install dependencies
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm install
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`postinstall` runs `prisma generate` automatically, so the typed client is ready.
 
-## Learn More
+### 3. Configure environment
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+cp .env.example .env
+# then edit .env — see the next section
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 4. Apply migrations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+pnpm db:migrate
+```
 
-## Deploy on Vercel
+### 5. Run the dev server
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm dev
+# http://localhost:3000
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> If you change `prisma/schema.prisma`, run `pnpm db:migrate` **and restart the dev server** — a running process keeps the old generated client in memory. `pnpm dev:reset` clears `.next`, regenerates, and restarts in one go.
+
+---
+
+## Environment variables
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | ✅ | Postgres connection string (used by Prisma runtime + CLI). |
+| `AUTH_SECRET` | ✅ | Auth.js session/JWT secret. Generate with `openssl rand -base64 32`. |
+| `AUTH_URL` | ✅ | App origin, e.g. `http://localhost:3000`. |
+| `AUTH_GOOGLE_ID` | ➖ | Google OAuth client ID. Leave blank to hide the Google button. |
+| `AUTH_GOOGLE_SECRET` | ➖ | Google OAuth client secret. |
+
+`.env` is gitignored. See `.env.example` for the template.
+
+---
+
+## Scripts
+
+| Script | Does |
+|---|---|
+| `pnpm dev` | Start the dev server. |
+| `pnpm dev:reset` | Clear `.next`, regenerate Prisma client, start dev. |
+| `pnpm build` | Production build. |
+| `pnpm start` | Serve the production build. |
+| `pnpm lint` | ESLint. |
+| `pnpm typecheck` | `tsc --noEmit`. |
+| `pnpm test` | Run Vitest once. |
+| `pnpm test:watch` | Vitest in watch mode. |
+| `pnpm db:migrate` | `prisma migrate dev`. |
+| `pnpm db:generate` | Regenerate the Prisma client. |
+| `pnpm db:studio` | Open Prisma Studio. |
+| `pnpm format` | Prettier write. |
+
+---
+
+## Project structure
+
+```
+app/
+  (auth)/                  login, register, sign-out (route group)
+  api/auth/[...nextauth]/   Auth.js route handler
+  dashboard/                user's groups + join form
+  groups/
+    new/                    create group
+    [groupId]/
+      page.tsx              group overview
+      layout.tsx            membership guard + sub-nav tabs
+      members/              roster, promote/demote, remove
+      players/              players, temp players, edit/status/link
+      settings/             join code regeneration (admin)
+  join/[code]/              public invite landing
+components/
+  auth/                     login/register forms
+  groups/                   group/member/player UI
+  shared/                   header, providers, role badge, sign-out
+  ui/                        shadcn primitives
+lib/
+  activity/                 ActivityLog writer
+  auth/                     Auth.js config, password hashing, session helpers
+  db/                        Prisma client singleton + generated client
+  groups/                    create-group, join-group, members, join-code services
+  players/                   player profile services
+  permissions/               role helpers + requireGroupRole
+  validations/               Zod schemas
+prisma/
+  schema.prisma              data model
+  migrations/                migration history
+tests/                       Vitest unit tests
+proxy.ts                     Auth.js edge guard (Next 16 middleware)
+```
+
+### Architecture rules
+
+- **Business logic lives in `lib/`, not in components.** Server Actions are thin wrappers around `lib/` services.
+- **Every group-scoped Server Action starts with `requireGroupRole(groupId, [...])`.** No exceptions.
+- **Soft delete, never hard delete** for records that match history depends on — statuses (`REMOVED`, `INACTIVE`) instead of row deletion.
+- **Pure functions are unit-tested in isolation** (`lib/permissions/roles.ts`, `lib/groups/join-code.ts`, the stacking algorithm in Phase 4).
+- Client components import enums from `@/lib/db/generated/enums` — never the `@/lib/db` barrel, which pulls the Node-only `pg` driver.
+
+---
+
+## Data model
+
+Implemented so far (Phases 1–2):
+
+| Model | Purpose |
+|---|---|
+| `User` | Registered account (Auth.js). |
+| `Account`, `Session`, `VerificationToken` | Auth.js adapter tables. |
+| `Group` | A pickleball group; has a unique join code + visibility. |
+| `GroupMember` | User ↔ Group link, with role + status. Unique on `(groupId, userId)`. |
+| `PlayerProfile` | A player in a group; `userId` nullable for temporary players. Unique on `(groupId, userId)`. |
+| `Invite` | A join code with optional expiry / max uses. |
+| `JoinRequest` | Pending request to join (workflow lands in Phase 8). |
+| `ActivityLog` | Audit trail of group changes (UI in Phase 8). |
+
+Planned (Phase 3+): `Session` (play session), `Court`, `SessionPlayer`, `Match`, `ScoreEvent`.
+
+---
+
+## Roles & permissions
+
+| | OWNER | ADMIN | PLAYER | VIEWER |
+|---|:---:|:---:|:---:|:---:|
+| View group, players, sessions, scores, history | ✅ | ✅ | ✅ | ✅ (if allowed) |
+| Create temporary players | ✅ | ✅ | ❌ | ❌ |
+| Invite users / regenerate join code | ✅ | ✅ | ❌ | ❌ |
+| Manage players (edit, status, link, remove) | ✅ | ✅ | ❌ | ❌ |
+| Approve join requests | ✅ | ✅ | ❌ | ❌ |
+| Create sessions, configure courts, generate stacking | ✅ | ✅ | ❌ | ❌ |
+| Enter / edit scores | ✅ | ✅ | ❌ | ❌ |
+| Promote / demote members | ✅ | partial¹ | ❌ | ❌ |
+| Remove members | ✅ | partial¹ | ❌ | ❌ |
+| Delete group / transfer ownership | ✅ | ❌ | ❌ | ❌ |
+
+¹ Admins can manage PLAYER/VIEWER members but **cannot** demote or remove another ADMIN or the OWNER — only the OWNER can act on admins. The OWNER can never be demoted or removed (ownership transfer arrives in Phase 8).
+
+Role hierarchy: **OWNER ⊇ ADMIN ⊇ PLAYER ⊇ VIEWER**. A check for `[PLAYER]` is satisfied by any higher role.
+
+---
+
+## Authorization model
+
+Every protected Server Action and server-side data fetch goes through `requireGroupRole(groupId, allowedRoles[])`, which verifies, in order:
+
+1. The user is authenticated.
+2. The group exists.
+3. The user is an **ACTIVE** member of that group.
+4. The user's role satisfies the allowed set.
+
+`groupId`, `playerId`, and `memberId` coming from the client are **never trusted** — services re-fetch each target and confirm it belongs to the same group before mutating. Frontend permission hiding is a UX nicety only; the server is the source of truth.
+
+---
+
+## Testing
+
+```bash
+pnpm test
+```
+
+Unit tests (Vitest) cover the critical pure logic and services:
+
+- **Permissions** — role hierarchy + `roleSatisfiesAny`.
+- **Join codes** — format, ambiguity-free alphabet, uniqueness, retry/exhaustion.
+- **Create group** — atomic Group + Owner + PlayerProfile + Invite composition.
+- **Join group** — invalid/disabled/expired/max-used codes, idempotency, member/profile revival, banned users.
+- **Members** — role-change and removal rules (owner protection, admin-vs-admin).
+- **Players** — temp creation, status changes, temp→user linking guards.
+- **Activity log** — writer payload + transaction passthrough.
+- **OAuth** — `email_verified` gate; **callback URLs** — open-redirect prevention.
+
+The Phase 4 stacking algorithm will be a pure function with its own dedicated test suite.
+
+---
+
+## Development phases & checklist
+
+Playsmash is built phase by phase. Each phase ends with type-check + lint + tests + build all green.
+
+### ✅ Phase 1 — Authentication & base schema
+
+- [x] Auth.js v5 (Credentials + Google OAuth) with Prisma adapter
+- [x] `User`, `Account`, `Session`, `VerificationToken`
+- [x] `Group`, `GroupMember`, `PlayerProfile`, `Invite`, `JoinRequest` + enums
+- [x] Initial migration
+- [x] Permission helpers (`requireUser`, `requireGroupRole`, role hierarchy)
+- [x] Zod validation schemas
+- [x] Dashboard shell + create-group flow (atomic Group + OWNER + PlayerProfile + Invite)
+- [x] Tests for permission helpers + join-code generator
+
+### ✅ Phase 2 — Joining, invites, members & temporary players
+
+- [x] `ActivityLog` model + write-side logger
+- [x] Join group by code (`/join/[code]` + dashboard form)
+- [x] Group settings page — display & regenerate join code
+- [x] Members page — list, promote/demote, remove (role rules enforced)
+- [x] Players page — roster of all profiles incl. temporary
+- [x] Create temporary players (admin)
+- [x] Edit player display name, skill level, status
+- [x] Remove / deactivate players (soft delete)
+- [x] Link a temporary player to a registered user
+- [x] Group sub-navigation tabs
+- [x] Server-side permission checks on every action
+- [x] Activity logs for player/member changes
+- [x] Tests for join, members, players, activity services
+
+### ⬜ Phase 3 — Sessions, attendance & courts
+
+- [ ] `Session`, `SessionPlayer`, `Court` models
+- [ ] Create a session (date, location, scoring type, points to win, win-by-two, court count)
+- [ ] Select available `PlayerProfile`s for a session
+- [ ] Session dashboard with player attendance states
+- [ ] Court list per session
+- [ ] Validation, authorization, activity logs
+
+### ⬜ Phase 4 — Stacking & shuffle generation
+
+- [ ] `Match` model
+- [ ] Stacking algorithm as pure functions (`generateRoundMatches`, `scoreCandidateMatch`, …)
+- [ ] Generate round matches from available players + court count
+- [ ] Assign matches to courts, track round numbers
+- [ ] Mark players PLAYING / WAITING / RESTING
+- [ ] Court cards UI + waiting players
+- [ ] Unit tests: 4/1, 8/2, 9/2-with-rest, repeated-partner penalty, fair rotation, no duplicates
+
+### ⬜ Phase 5 — Scoring & match lifecycle
+
+- [ ] Start match, enter scores, validate, complete
+- [ ] Winner determination (points-to-win, win-by-two)
+- [ ] Update player statuses after a match
+- [ ] Completed matches view
+- [ ] Admin score editing with activity log
+- [ ] Scoring validation tests
+
+### ⬜ Phase 6 — Player stats & history
+
+- [ ] Player match history
+- [ ] Group leaderboard / basic stats (games, wins, losses, win %, point differential, partners)
+- [ ] Temporary players included in stats
+
+### ⬜ Phase 7 — Realtime / live session UX
+
+- [ ] Auto-refresh / realtime stacking & score updates
+- [ ] Mobile-friendly court assignment display
+- [ ] Clear visual match/player states
+
+### ⬜ Phase 8 — Admin polish, audit & deployment
+
+- [ ] Activity log page
+- [ ] Ownership transfer
+- [ ] Group settings (edit name/visibility) + soft-delete behavior
+- [ ] Join request approval workflow
+- [ ] Duplicate temporary-player linking helper
+- [ ] Production deployment checklist + demo seed script
+- [ ] Final QA pass
+
+### MVP definition of done
+
+The MVP is complete when a user can register/login, create a group, invite or add players (including temporary ones), create a session, select players, set courts, generate doubles court assignments, view stacking, enter scores, view scores, and see basic player stats — all with server-side permissions enforced.

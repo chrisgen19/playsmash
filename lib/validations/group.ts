@@ -31,7 +31,10 @@ export const joinGroupSchema = z.object({
     .trim()
     .toUpperCase()
     .min(4, { message: "Join code is required" })
-    .max(16),
+    .max(16)
+    .regex(/^[A-Z2-9]+$/, {
+      message: "Join code uses only letters and digits",
+    }),
 });
 
 export type JoinGroupInput = z.infer<typeof joinGroupSchema>;
