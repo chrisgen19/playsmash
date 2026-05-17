@@ -1,5 +1,7 @@
 import type { NextAuthConfig } from "next-auth";
 
+import { isVerifiedOAuthProfile } from "./oauth-verification";
+
 /**
  * Edge-safe Auth.js config — used by `proxy.ts` (Next 16 middleware).
  *
@@ -16,6 +18,12 @@ export const authConfig = {
   session: { strategy: "jwt" },
   providers: [],
   callbacks: {
+    signIn({ account, profile }) {
+      if (account?.provider === "google") {
+        return isVerifiedOAuthProfile(profile);
+      }
+      return true;
+    },
     authorized({ auth, request }) {
       const isLoggedIn = !!auth?.user;
       const path = request.nextUrl.pathname;

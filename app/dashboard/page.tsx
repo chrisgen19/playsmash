@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { requireUser } from "@/lib/auth/session";
-import { prisma, GroupMemberStatus } from "@/lib/db";
+import { prisma, GroupMemberStatus, PlayerStatus } from "@/lib/db";
 import type { GroupRoleValue } from "@/lib/permissions/group";
 
 export default async function DashboardPage() {
@@ -28,7 +28,14 @@ export default async function DashboardPage() {
           name: true,
           description: true,
           joinCode: true,
-          _count: { select: { members: true, players: true } },
+          // Keep these filters in lockstep with app/groups/[groupId]/page.tsx
+          // so the dashboard cards and the group detail page never disagree.
+          _count: {
+            select: {
+              members: { where: { status: GroupMemberStatus.ACTIVE } },
+              players: { where: { status: { not: PlayerStatus.REMOVED } } },
+            },
+          },
         },
       },
     },
