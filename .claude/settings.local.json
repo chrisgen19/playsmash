@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql --version)",
+      "Bash(brew services *)",
+      "Bash(PGPASSWORD=mypassword psql *)",
+      "Bash(pnpm -v)",
+      "Bash(git --version)",
+      "Bash(pnpm create *)"
+    ]
+  }
+}
