@@ -16,6 +16,19 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is not set — cannot seed.");
 }
 
+// Safety gate: the seed deletes the demo group by a fixed join code. Running
+// it against production could destroy real data, so a prod run must opt in
+// explicitly. Dev/test runs are unaffected.
+if (
+  process.env.NODE_ENV === "production" &&
+  process.env.ALLOW_DEMO_SEED !== "true"
+) {
+  throw new Error(
+    "Refusing to run the demo seed with NODE_ENV=production. " +
+      "Set ALLOW_DEMO_SEED=true to override (staging only — never production).",
+  );
+}
+
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString }),
 });

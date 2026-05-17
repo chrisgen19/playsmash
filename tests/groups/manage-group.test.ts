@@ -9,13 +9,11 @@ import {
 const { prismaMock, txMocks } = vi.hoisted(() => {
   const txMocks = {
     $queryRaw: vi.fn(),
-    group: { update: vi.fn() },
+    group: { update: vi.fn(), findUniqueOrThrow: vi.fn() },
     groupMember: { findUnique: vi.fn(), update: vi.fn() },
     activityLog: { create: vi.fn() },
   };
   const prismaMock = {
-    group: { findUnique: vi.fn() },
-    groupMember: { findUnique: vi.fn() },
     $transaction: vi.fn(async (fn: (tx: typeof txMocks) => unknown) =>
       fn(txMocks),
     ),
@@ -37,21 +35,23 @@ const { NotFoundError } = await import("@/lib/permissions/errors");
 describe("editGroup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.group.findUnique.mockResolvedValue({
+    txMocks.$queryRaw.mockResolvedValue([{ status: GroupStatus.ACTIVE }]);
+    txMocks.group.findUniqueOrThrow.mockResolvedValue({
       id: "g_1",
       name: "Old",
       description: null,
       visibility: "INVITE_ONLY",
-      status: GroupStatus.ACTIVE,
     });
   });
 
-  it("updates fields and logs the change", async () => {
+  it("locks the group row, updates fields, and logs the change", async () => {
     await editGroup({
       groupId: "g_1",
       actorUserId: "u_owner",
       input: { name: "New Name", description: "hi", visibility: "PUBLIC" },
     });
+    const sql = (txMocks.$queryRaw.mock.calls[0]?.[0] as string[]).join("?");
+    expect(sql).toContain("FOR UPDATE");
     expect(txMocks.group.update).toHaveBeenCalledWith({
       where: { id: "g_1" },
       data: { name: "New Name", description: "hi", visibility: "PUBLIC" },
@@ -59,14 +59,8 @@ describe("editGroup", () => {
     expect(txMocks.activityLog.create).toHaveBeenCalled();
   });
 
-  it("rejects editing an archived group", async () => {
-    prismaMock.group.findUnique.mockResolvedValue({
-      id: "g_1",
-      name: "Old",
-      description: null,
-      visibility: "INVITE_ONLY",
-      status: GroupStatus.ARCHIVED,
-    });
+  it("rejects editing an archived group (checked under the lock)", async () => {
+    txMocks.$queryRaw.mockResolvedValue([{ status: GroupStatus.ARCHIVED }]);
     await expect(
       editGroup({
         groupId: "g_1",
@@ -74,6 +68,18 @@ describe("editGroup", () => {
         input: { name: "x", description: undefined, visibility: "PUBLIC" },
       }),
     ).rejects.toMatchObject({ code: "GROUP_ARCHIVED" });
+    expect(txMocks.group.update).not.toHaveBeenCalled();
+  });
+
+  it("throws NotFound when the group is gone", async () => {
+    txMocks.$queryRaw.mockResolvedValue([]);
+    await expect(
+      editGroup({
+        groupId: "g_1",
+        actorUserId: "u_owner",
+        input: { name: "x", description: undefined, visibility: "PUBLIC" },
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
   });
 });
 
@@ -109,22 +115,22 @@ describe("archiveGroup", () => {
 });
 
 describe("transferOwnership", () => {
+  const activeTarget = {
+    id: "m_target",
+    groupId: "g_1",
+    userId: "u_target",
+    role: GroupRole.ADMIN,
+    status: GroupMemberStatus.ACTIVE,
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     txMocks.$queryRaw.mockResolvedValue([{ status: GroupStatus.ACTIVE }]);
-    // Target member (the new owner).
-    prismaMock.groupMember.findUnique.mockResolvedValue({
-      id: "m_target",
-      groupId: "g_1",
-      userId: "u_target",
-      role: GroupRole.ADMIN,
-      status: GroupMemberStatus.ACTIVE,
-    });
-    // Current owner lookup inside the tx.
-    txMocks.groupMember.findUnique.mockResolvedValue({
-      id: "m_owner",
-      role: GroupRole.OWNER,
-    });
+    // groupMember.findUnique is called twice inside the tx: target, then
+    // the current owner.
+    txMocks.groupMember.findUnique
+      .mockResolvedValueOnce(activeTarget)
+      .mockResolvedValueOnce({ id: "m_owner", role: GroupRole.OWNER });
   });
 
   it("demotes the owner to ADMIN and promotes the target to OWNER", async () => {
@@ -147,13 +153,22 @@ describe("transferOwnership", () => {
     });
   });
 
+  it("rejects an archived group under the lock", async () => {
+    txMocks.$queryRaw.mockResolvedValue([{ status: GroupStatus.ARCHIVED }]);
+    await expect(
+      transferOwnership({
+        groupId: "g_1",
+        currentOwnerUserId: "u_owner",
+        targetMemberId: "m_target",
+      }),
+    ).rejects.toMatchObject({ code: "GROUP_ARCHIVED" });
+  });
+
   it("rejects a target from another group", async () => {
-    prismaMock.groupMember.findUnique.mockResolvedValue({
-      id: "m_target",
+    txMocks.groupMember.findUnique.mockReset();
+    txMocks.groupMember.findUnique.mockResolvedValueOnce({
+      ...activeTarget,
       groupId: "g_OTHER",
-      userId: "u_target",
-      role: GroupRole.ADMIN,
-      status: GroupMemberStatus.ACTIVE,
     });
     await expect(
       transferOwnership({
@@ -165,11 +180,9 @@ describe("transferOwnership", () => {
   });
 
   it("rejects a non-active target", async () => {
-    prismaMock.groupMember.findUnique.mockResolvedValue({
-      id: "m_target",
-      groupId: "g_1",
-      userId: "u_target",
-      role: GroupRole.PLAYER,
+    txMocks.groupMember.findUnique.mockReset();
+    txMocks.groupMember.findUnique.mockResolvedValueOnce({
+      ...activeTarget,
       status: GroupMemberStatus.REMOVED,
     });
     await expect(
@@ -182,12 +195,10 @@ describe("transferOwnership", () => {
   });
 
   it("rejects transferring to the current owner", async () => {
-    prismaMock.groupMember.findUnique.mockResolvedValue({
-      id: "m_target",
-      groupId: "g_1",
-      userId: "u_target",
+    txMocks.groupMember.findUnique.mockReset();
+    txMocks.groupMember.findUnique.mockResolvedValueOnce({
+      ...activeTarget,
       role: GroupRole.OWNER,
-      status: GroupMemberStatus.ACTIVE,
     });
     await expect(
       transferOwnership({
@@ -199,10 +210,10 @@ describe("transferOwnership", () => {
   });
 
   it("aborts if the actor is no longer owner inside the lock (race)", async () => {
-    txMocks.groupMember.findUnique.mockResolvedValue({
-      id: "m_owner",
-      role: GroupRole.ADMIN, // someone already transferred away
-    });
+    txMocks.groupMember.findUnique.mockReset();
+    txMocks.groupMember.findUnique
+      .mockResolvedValueOnce(activeTarget)
+      .mockResolvedValueOnce({ id: "m_owner", role: GroupRole.ADMIN });
     await expect(
       transferOwnership({
         groupId: "g_1",

@@ -1,5 +1,6 @@
 import {
   prisma,
+  Prisma,
   GroupRole,
   GroupMemberStatus,
   GroupStatus,
@@ -26,123 +27,179 @@ export class JoinRequestError extends Error {
   }
 }
 
+/** Minimal tx shape for the raw locking SELECTs. */
+type RawTx = Pick<typeof prisma, "$queryRaw">;
+
+/** Lock a JoinRequest row for the rest of the tx; returns its status. */
+async function lockJoinRequestStatus(
+  tx: RawTx,
+  requestId: string,
+): Promise<string | null> {
+  const rows = await tx.$queryRaw<Array<{ status: string }>>`
+    SELECT "status" FROM "JoinRequest" WHERE "id" = ${requestId} FOR UPDATE
+  `;
+  return rows[0]?.status ?? null;
+}
+
 /**
  * A signed-in non-member asks to join a PUBLIC group. Creates (or revives)
- * a PENDING JoinRequest. Admins approve/reject from the members page.
+ * a PENDING JoinRequest.
+ *
+ * All eligibility checks run *inside* the transaction so a concurrent archive
+ * or membership change can't let a stale PENDING request through. The
+ * (groupId, userId) unique constraint serializes concurrent first-requests —
+ * the loser's P2002 is mapped to ALREADY_PENDING.
  */
 export async function requestToJoin(params: {
   groupId: string;
   userId: string;
 }): Promise<void> {
-  const group = await prisma.group.findUnique({
-    where: { id: params.groupId },
-    select: { id: true, visibility: true, status: true },
-  });
-  if (!group) throw new NotFoundError("Group not found");
-  if (group.status === GroupStatus.ARCHIVED) {
-    throw new JoinRequestError("GROUP_ARCHIVED", "This group is archived");
-  }
-  if (group.visibility !== GroupVisibility.PUBLIC) {
-    throw new JoinRequestError(
-      "NOT_PUBLIC",
-      "This group does not accept join requests",
-    );
-  }
-
-  const member = await prisma.groupMember.findUnique({
-    where: {
-      groupId_userId: { groupId: params.groupId, userId: params.userId },
-    },
-    select: { status: true },
-  });
-  if (member?.status === GroupMemberStatus.ACTIVE) {
-    throw new JoinRequestError("ALREADY_MEMBER", "You are already a member");
-  }
-  if (member?.status === GroupMemberStatus.BANNED) {
-    throw new JoinRequestError("BANNED", "You can't join this group");
-  }
-
-  const existing = await prisma.joinRequest.findUnique({
-    where: {
-      groupId_userId: { groupId: params.groupId, userId: params.userId },
-    },
-    select: { id: true, status: true },
-  });
-  if (existing?.status === JoinRequestStatus.PENDING) {
-    throw new JoinRequestError(
-      "ALREADY_PENDING",
-      "Your request is already pending",
-    );
-  }
-
-  await prisma.$transaction(async (tx) => {
-    if (existing) {
-      // Revive a prior rejected/cancelled request rather than duplicating.
-      await tx.joinRequest.update({
-        where: { id: existing.id },
-        data: { status: JoinRequestStatus.PENDING },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const group = await tx.group.findUnique({
+        where: { id: params.groupId },
+        select: { visibility: true, status: true },
       });
-    } else {
-      await tx.joinRequest.create({
-        data: {
+      if (!group) throw new NotFoundError("Group not found");
+      if (group.status === GroupStatus.ARCHIVED) {
+        throw new JoinRequestError("GROUP_ARCHIVED", "This group is archived");
+      }
+      if (group.visibility !== GroupVisibility.PUBLIC) {
+        throw new JoinRequestError(
+          "NOT_PUBLIC",
+          "This group does not accept join requests",
+        );
+      }
+
+      const member = await tx.groupMember.findUnique({
+        where: {
+          groupId_userId: { groupId: params.groupId, userId: params.userId },
+        },
+        select: { status: true },
+      });
+      if (member?.status === GroupMemberStatus.ACTIVE) {
+        throw new JoinRequestError("ALREADY_MEMBER", "You are already a member");
+      }
+      if (member?.status === GroupMemberStatus.BANNED) {
+        throw new JoinRequestError("BANNED", "You can't join this group");
+      }
+
+      const existing = await tx.joinRequest.findUnique({
+        where: {
+          groupId_userId: { groupId: params.groupId, userId: params.userId },
+        },
+        select: { id: true, status: true },
+      });
+      if (existing?.status === JoinRequestStatus.PENDING) {
+        throw new JoinRequestError(
+          "ALREADY_PENDING",
+          "Your request is already pending",
+        );
+      }
+
+      // Revive a prior rejected/cancelled request, or create a new one.
+      const requestId = existing
+        ? (
+            await tx.joinRequest.update({
+              where: { id: existing.id },
+              data: { status: JoinRequestStatus.PENDING },
+              select: { id: true },
+            })
+          ).id
+        : (
+            await tx.joinRequest.create({
+              data: {
+                groupId: params.groupId,
+                userId: params.userId,
+                status: JoinRequestStatus.PENDING,
+              },
+              select: { id: true },
+            })
+          ).id;
+
+      await logActivity(
+        {
           groupId: params.groupId,
           userId: params.userId,
-          status: JoinRequestStatus.PENDING,
+          action: ActivityAction.JOIN_REQUEST_CREATED,
+          targetType: "JoinRequest",
+          targetId: requestId,
         },
-      });
+        tx,
+      );
+    });
+  } catch (err) {
+    // Two concurrent first-requests: the loser hit the (groupId, userId)
+    // unique constraint — the other request is now PENDING.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      throw new JoinRequestError(
+        "ALREADY_PENDING",
+        "Your request is already pending",
+      );
     }
-    await logActivity(
-      {
-        groupId: params.groupId,
-        userId: params.userId,
-        action: ActivityAction.JOIN_REQUEST_CREATED,
-        targetType: "JoinRequest",
-        targetId: params.userId,
-      },
-      tx,
-    );
-  });
+    throw err;
+  }
 }
 
 /**
  * Approve a pending request: creates the GroupMember (PLAYER) + a linked
- * PlayerProfile, mirroring the join-by-code transaction. OWNER/ADMIN only
- * (caller enforces). Race-safe — the JoinRequest row is the serialization
- * point (its status flips to APPROVED inside the tx).
+ * PlayerProfile, mirroring join-by-code. OWNER/ADMIN only (caller enforces).
+ *
+ * The JoinRequest row is locked and re-checked PENDING inside the tx, and the
+ * group's archived state re-checked, so concurrent moderation can't double-
+ * approve or approve into an archived group.
  */
 export async function approveJoinRequest(params: {
   groupId: string;
   actorUserId: string;
   requestId: string;
 }): Promise<void> {
-  const request = await prisma.joinRequest.findUnique({
+  // Pre-tx fast-fail for ownership + obvious wrong state.
+  const pre = await prisma.joinRequest.findUnique({
     where: { id: params.requestId },
-    select: {
-      id: true,
-      groupId: true,
-      userId: true,
-      status: true,
-      user: { select: { name: true, email: true } },
-    },
+    select: { groupId: true },
   });
-  if (!request || request.groupId !== params.groupId) {
+  if (!pre || pre.groupId !== params.groupId) {
     throw new NotFoundError("Join request not found in this group");
   }
-  if (request.status !== JoinRequestStatus.PENDING) {
-    throw new JoinRequestError(
-      "REQUEST_NOT_PENDING",
-      "This request is no longer pending",
-    );
-  }
-
-  const displayName =
-    request.user.name?.trim() ||
-    request.user.email.split("@")[0] ||
-    "Player";
 
   await prisma.$transaction(async (tx) => {
+    const status = await lockJoinRequestStatus(tx, params.requestId);
+    if (status === null) {
+      throw new NotFoundError("Join request not found in this group");
+    }
+    if (status !== JoinRequestStatus.PENDING) {
+      throw new JoinRequestError(
+        "REQUEST_NOT_PENDING",
+        "This request is no longer pending",
+      );
+    }
+
+    const group = await tx.group.findUnique({
+      where: { id: params.groupId },
+      select: { status: true },
+    });
+    if (group?.status === GroupStatus.ARCHIVED) {
+      throw new JoinRequestError("GROUP_ARCHIVED", "This group is archived");
+    }
+
+    const request = await tx.joinRequest.findUniqueOrThrow({
+      where: { id: params.requestId },
+      select: {
+        userId: true,
+        user: { select: { name: true, email: true } },
+      },
+    });
+    const displayName =
+      request.user.name?.trim() ||
+      request.user.email.split("@")[0] ||
+      "Player";
+
     await tx.joinRequest.update({
-      where: { id: request.id },
+      where: { id: params.requestId },
       data: { status: JoinRequestStatus.APPROVED },
     });
 
@@ -203,7 +260,7 @@ export async function approveJoinRequest(params: {
         userId: params.actorUserId,
         action: ActivityAction.JOIN_REQUEST_APPROVED,
         targetType: "JoinRequest",
-        targetId: request.id,
+        targetId: params.requestId,
         newValue: { userId: request.userId },
       },
       tx,
@@ -217,23 +274,33 @@ export async function rejectJoinRequest(params: {
   actorUserId: string;
   requestId: string;
 }): Promise<void> {
-  const request = await prisma.joinRequest.findUnique({
+  const pre = await prisma.joinRequest.findUnique({
     where: { id: params.requestId },
-    select: { id: true, groupId: true, userId: true, status: true },
+    select: { groupId: true },
   });
-  if (!request || request.groupId !== params.groupId) {
+  if (!pre || pre.groupId !== params.groupId) {
     throw new NotFoundError("Join request not found in this group");
-  }
-  if (request.status !== JoinRequestStatus.PENDING) {
-    throw new JoinRequestError(
-      "REQUEST_NOT_PENDING",
-      "This request is no longer pending",
-    );
   }
 
   await prisma.$transaction(async (tx) => {
+    const status = await lockJoinRequestStatus(tx, params.requestId);
+    if (status === null) {
+      throw new NotFoundError("Join request not found in this group");
+    }
+    if (status !== JoinRequestStatus.PENDING) {
+      throw new JoinRequestError(
+        "REQUEST_NOT_PENDING",
+        "This request is no longer pending",
+      );
+    }
+
+    const request = await tx.joinRequest.findUniqueOrThrow({
+      where: { id: params.requestId },
+      select: { userId: true },
+    });
+
     await tx.joinRequest.update({
-      where: { id: request.id },
+      where: { id: params.requestId },
       data: { status: JoinRequestStatus.REJECTED },
     });
     await logActivity(
@@ -242,7 +309,7 @@ export async function rejectJoinRequest(params: {
         userId: params.actorUserId,
         action: ActivityAction.JOIN_REQUEST_REJECTED,
         targetType: "JoinRequest",
-        targetId: request.id,
+        targetId: params.requestId,
         newValue: { userId: request.userId },
       },
       tx,

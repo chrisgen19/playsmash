@@ -20,6 +20,7 @@ const MESSAGE: Record<JoinGroupError["code"], string> = {
   CODE_EXPIRED: "This join code has expired.",
   CODE_MAX_USES: "This join code has reached its usage limit.",
   MEMBER_BANNED: "You can't join this group.",
+  GROUP_ARCHIVED: "This group is archived.",
 };
 
 export async function joinGroupAction(

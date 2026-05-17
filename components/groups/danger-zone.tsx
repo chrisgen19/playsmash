@@ -64,7 +64,11 @@ function TransferOwnership({
         You become an admin; the chosen member becomes the owner.
       </p>
       <div className="flex flex-wrap items-center gap-2">
+        <label htmlFor="transfer-member-id" className="sr-only">
+          New owner
+        </label>
         <select
+          id="transfer-member-id"
           name="memberId"
           required
           className="border-input bg-background h-9 rounded-md border px-3 text-sm"

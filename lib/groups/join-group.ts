@@ -3,6 +3,7 @@ import {
   Prisma,
   GroupRole,
   GroupMemberStatus,
+  GroupStatus,
   PlayerStatus,
   InviteStatus,
 } from "@/lib/db";
@@ -20,7 +21,8 @@ export class JoinGroupError extends Error {
       | "CODE_DISABLED"
       | "CODE_EXPIRED"
       | "CODE_MAX_USES"
-      | "MEMBER_BANNED",
+      | "MEMBER_BANNED"
+      | "GROUP_ARCHIVED",
     message: string,
   ) {
     super(message);
@@ -101,6 +103,20 @@ export async function joinGroupByCode(params: {
         throw new JoinGroupError(
           "CODE_MAX_USES",
           "Join code has reached its usage limit",
+        );
+      }
+
+      // An archived group's join codes are dead even if the Invite row is
+      // still ACTIVE — checked inside the tx so a concurrent archive can't
+      // slip a join through.
+      const group = await tx.group.findUnique({
+        where: { id: invite.groupId },
+        select: { status: true },
+      });
+      if (group?.status === GroupStatus.ARCHIVED) {
+        throw new JoinGroupError(
+          "GROUP_ARCHIVED",
+          "This group is archived",
         );
       }
 

@@ -15,7 +15,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "@/lib/permissions/errors";
-import { getGroupRole, requireGroupRole } from "@/lib/permissions/group";
+import { requireGroupRole } from "@/lib/permissions/group";
 import { editGroupSchema } from "@/lib/validations/group";
 
 const OWNERS_AND_ADMINS = [GroupRole.OWNER, GroupRole.ADMIN] as const;
@@ -105,13 +105,25 @@ export async function archiveGroupAction(formData: FormData) {
   const groupId = String(formData.get("groupId") ?? "");
   if (!groupId) throw new Error("Missing groupId");
 
-  // archiveGroup is OWNER-only; getGroupRole confirms before we act so a
-  // non-owner just bounces to the group page.
+  // requireGroupRole already rejects archived groups and non-owners; this is
+  // OWNER-only.
   const { userId } = await requireGroupRole(groupId, OWNER_ONLY);
-  const role = await getGroupRole(userId, groupId);
-  if (role !== GroupRole.OWNER) redirect(`/groups/${groupId}`);
 
-  await archiveGroup({ groupId, actorUserId: userId });
+  try {
+    await archiveGroup({ groupId, actorUserId: userId });
+  } catch (err) {
+    // A lost archive race (already archived / vanished) shouldn't 500 — the
+    // end state the user wanted is reached either way, so bounce to the
+    // group page and let its layout redirect an archived group onward.
+    if (
+      err instanceof ManageGroupError ||
+      err instanceof ForbiddenError ||
+      err instanceof NotFoundError
+    ) {
+      redirect(`/groups/${groupId}`);
+    }
+    throw err;
+  }
 
   revalidatePath("/dashboard");
   redirect("/dashboard");

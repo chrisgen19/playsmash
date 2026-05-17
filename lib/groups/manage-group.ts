@@ -42,22 +42,20 @@ export async function editGroup(params: {
   actorUserId: string;
   input: EditGroupInput;
 }): Promise<void> {
-  const group = await prisma.group.findUnique({
-    where: { id: params.groupId },
-    select: {
-      id: true,
-      name: true,
-      description: true,
-      visibility: true,
-      status: true,
-    },
-  });
-  if (!group) throw new NotFoundError("Group not found");
-  if (group.status === GroupStatus.ARCHIVED) {
-    throw new ManageGroupError("GROUP_ARCHIVED", "This group is archived");
-  }
-
   await prisma.$transaction(async (tx) => {
+    // Lock + validate inside the tx so a concurrent archive can't slip a
+    // mutation through or make `oldValue` stale.
+    const status = await lockGroupStatus(tx, params.groupId);
+    if (status === null) throw new NotFoundError("Group not found");
+    if (status === GroupStatus.ARCHIVED) {
+      throw new ManageGroupError("GROUP_ARCHIVED", "This group is archived");
+    }
+
+    const group = await tx.group.findUniqueOrThrow({
+      where: { id: params.groupId },
+      select: { id: true, name: true, description: true, visibility: true },
+    });
+
     await tx.group.update({
       where: { id: group.id },
       data: {
@@ -138,32 +136,40 @@ export async function transferOwnership(params: {
   currentOwnerUserId: string;
   targetMemberId: string;
 }): Promise<void> {
-  const target = await prisma.groupMember.findUnique({
-    where: { id: params.targetMemberId },
-    select: { id: true, groupId: true, userId: true, role: true, status: true },
-  });
-  if (!target || target.groupId !== params.groupId) {
-    throw new NotFoundError("Member not found in this group");
-  }
-  if (target.status !== GroupMemberStatus.ACTIVE) {
-    throw new ManageGroupError(
-      "TARGET_NOT_MEMBER",
-      "Ownership can only be transferred to an active member",
-    );
-  }
-  if (target.role === GroupRole.OWNER) {
-    throw new ManageGroupError(
-      "TARGET_ALREADY_OWNER",
-      "That member is already the owner",
-    );
-  }
-
   await prisma.$transaction(async (tx) => {
     // Lock the group so two transfers can't interleave.
     const status = await lockGroupStatus(tx, params.groupId);
     if (status === null) throw new NotFoundError("Group not found");
     if (status === GroupStatus.ARCHIVED) {
       throw new ManageGroupError("GROUP_ARCHIVED", "This group is archived");
+    }
+
+    // Re-read the target *inside* the locked tx — a concurrent role/status
+    // change can't bypass the ACTIVE / non-owner constraints this way.
+    const target = await tx.groupMember.findUnique({
+      where: { id: params.targetMemberId },
+      select: {
+        id: true,
+        groupId: true,
+        userId: true,
+        role: true,
+        status: true,
+      },
+    });
+    if (!target || target.groupId !== params.groupId) {
+      throw new NotFoundError("Member not found in this group");
+    }
+    if (target.status !== GroupMemberStatus.ACTIVE) {
+      throw new ManageGroupError(
+        "TARGET_NOT_MEMBER",
+        "Ownership can only be transferred to an active member",
+      );
+    }
+    if (target.role === GroupRole.OWNER) {
+      throw new ManageGroupError(
+        "TARGET_ALREADY_OWNER",
+        "That member is already the owner",
+      );
     }
 
     // Find the current OWNER membership row by user id.

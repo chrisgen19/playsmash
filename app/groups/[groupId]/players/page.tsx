@@ -92,17 +92,23 @@ export default async function GroupPlayersPage({
 
   // Likely-duplicate suggestions: a temporary profile whose name matches a
   // member who has no profile yet. Admins can one-click link these.
+  //
+  // Match only against members with a *real* name — never the email
+  // fallback, or a temp player named like an email local-part would
+  // false-positive into a one-click link.
+  const namedCandidates = membersWithoutProfile
+    .map(({ user: u }) => {
+      const realName =
+        u.name ?? [u.firstName, u.lastName].filter(Boolean).join(" ");
+      return realName ? { userId: u.id, displayName: realName } : null;
+    })
+    .filter((c): c is { userId: string; displayName: string } => c !== null);
+
   const tempPlayers = players
     .filter((p) => p.userId === null && p.status !== PlayerStatus.REMOVED)
     .map((p) => ({ id: p.id, displayName: p.displayName }));
   const duplicateSuggestions = canManage
-    ? suggestDuplicateLinks(
-        tempPlayers,
-        linkCandidates.map((c) => ({
-          userId: c.userId,
-          displayName: c.label,
-        })),
-      )
+    ? suggestDuplicateLinks(tempPlayers, namedCandidates)
     : [];
 
   return (

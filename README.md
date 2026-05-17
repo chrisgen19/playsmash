@@ -392,7 +392,7 @@ courts and two completed, scored matches.
 
 Sign in with any of these (password `playsmash-demo`):
 
-```
+```text
 demo.owner@playsmash.test   — OWNER
 demo.admin@playsmash.test   — ADMIN
 demo.pat@playsmash.test     — PLAYER

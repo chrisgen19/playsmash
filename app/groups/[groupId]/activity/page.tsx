@@ -75,6 +75,12 @@ export default async function ActivityLogPage({
   const rows = hasNext ? logs.slice(0, PAGE_SIZE) : logs;
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
+  // A `?page=` past the end would render a misleading "no activity" empty
+  // state even though events exist — bounce to the real last page.
+  if (total > 0 && page > lastPage) {
+    redirect(`/groups/${groupId}/activity?page=${lastPage}`);
+  }
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <div className="mb-6">
